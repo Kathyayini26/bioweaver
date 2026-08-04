@@ -216,3 +216,39 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual Environment
+.venv/
+venv/
+env/
+
+# VS Code
+.vscode/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Trained models
+data/processed/*.pkl
+
+# Generated graph files
+data/processed/*.gpickle
+
+
+
+# Generated files
+data/processed/node_embeddings.csv
+data/processed/training_dataset.csv
+data/processed/testing_dataset.csv
+data/processed/random_forest_model.pkl
+data/processed/bioweaver_graph.pkl

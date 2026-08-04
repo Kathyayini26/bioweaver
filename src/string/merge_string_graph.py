@@ -1,36 +1,47 @@
 import pandas as pd
 import networkx as nx
+import pickle
 
-# ----------------------------
-# Load Monarch dataset
-# ----------------------------
+# --------------------------------------------------
+# Load Training Monarch Edges
+# --------------------------------------------------
+
 monarch = pd.read_csv(
-    "data/processed/gene_disease_cleaned.csv"
+    "data/processed/train_edges.csv"
 )
 
-# ----------------------------
-# Load STRING interactions
-# ----------------------------
+# --------------------------------------------------
+# Load STRING Interactions
+# --------------------------------------------------
+
 string = pd.read_csv(
     "data/processed/string_interactions.csv"
 )
 
-# ----------------------------
-# Create graph
-# ----------------------------
+# --------------------------------------------------
+# Create Knowledge Graph
+# --------------------------------------------------
+
 G = nx.DiGraph()
 
-# ============================
-# Add Gene -> Disease edges
-# ============================
+# --------------------------------------------------
+# Add Gene → Disease Edges
+# --------------------------------------------------
 
 for _, row in monarch.iterrows():
 
     gene = row["subject_label"]
     disease = row["object_label"]
 
-    G.add_node(gene, node_type="Gene")
-    G.add_node(disease, node_type="Disease")
+    G.add_node(
+        gene,
+        node_type="Gene"
+    )
+
+    G.add_node(
+        disease,
+        node_type="Disease"
+    )
 
     G.add_edge(
         gene,
@@ -38,17 +49,24 @@ for _, row in monarch.iterrows():
         relationship="causes"
     )
 
-# ============================
-# Add Gene -> Gene edges
-# ============================
+# --------------------------------------------------
+# Add Gene → Gene STRING Edges
+# --------------------------------------------------
 
 for _, row in string.iterrows():
 
     gene1 = row["gene1"]
     gene2 = row["gene2"]
 
-    G.add_node(gene1, node_type="Gene")
-    G.add_node(gene2, node_type="Gene")
+    G.add_node(
+        gene1,
+        node_type="Gene"
+    )
+
+    G.add_node(
+        gene2,
+        node_type="Gene"
+    )
 
     G.add_edge(
         gene1,
@@ -57,6 +75,10 @@ for _, row in string.iterrows():
         score=row["score"]
     )
 
+# --------------------------------------------------
+# Graph Summary
+# --------------------------------------------------
+
 print("=" * 60)
 print("FINAL BIOWEAVER GRAPH")
 print("=" * 60)
@@ -64,36 +86,68 @@ print("=" * 60)
 print("Nodes :", G.number_of_nodes())
 print("Edges :", G.number_of_edges())
 
-print("\nSample edges:\n")
+# --------------------------------------------------
+# Count Edge Types
+# --------------------------------------------------
+
+causes = 0
+interacts = 0
+
+for _, _, edge_data in G.edges(data=True):
+
+    if edge_data["relationship"] == "causes":
+        causes += 1
+
+    elif edge_data["relationship"] == "interacts_with":
+        interacts += 1
+
+print("\nCauses Edges      :", causes)
+print("Interaction Edges :", interacts)
+
+# --------------------------------------------------
+# Sample Edges
+# --------------------------------------------------
+
+print("\nSample Edges:\n")
 
 count = 0
 
-for u, v, data in G.edges(data=True):
+for u, v, edge_data in G.edges(data=True):
 
-    print(u, "---->", v, data)
+    print(u, "---->", v, edge_data)
 
     count += 1
 
     if count == 15:
         break
 
-    causes = 0
-interacts = 0
+# --------------------------------------------------
+# Graph Validation
+# --------------------------------------------------
 
-for _, _, data in G.edges(data=True):
-    if data["relationship"] == "causes":
-        causes += 1
-    elif data["relationship"] == "interacts_with":
-        interacts += 1
+print("\n" + "=" * 60)
+print("GRAPH VALIDATION")
+print("=" * 60)
 
-print("\nCauses edges:", causes)
-print("Interaction edges:", interacts)
+isolated_nodes = list(nx.isolates(G))
 
-import networkx as nx
+print("Isolated Nodes :", len(isolated_nodes))
 
-import pickle
+if len(isolated_nodes) == 0:
+    print("Graph validation successful.")
+else:
+    print("Warning: Graph contains isolated nodes.")
 
-with open("data/processed/bioweaver_graph.pkl", "wb") as f:
+# --------------------------------------------------
+# Save Graph
+# --------------------------------------------------
+
+with open(
+    "data/processed/bioweaver_graph.pkl",
+    "wb"
+) as f:
+
     pickle.dump(G, f)
 
-print("Graph saved successfully!")
+print("\nGraph saved successfully!")
+print("Saved to: data/processed/bioweaver_graph.pkl")
