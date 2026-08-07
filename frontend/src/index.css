@@ -1,7 +1,17 @@
+@import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,600;0,6..72,700;1,6..72,400&display=swap');
 @import "tailwindcss";
+
+html {
+  scroll-behavior: smooth;
+}
 
 /* Enable class-based dark mode strategy in Tailwind CSS v4 */
 @custom-variant dark (&:where(.dark, .dark *));
+
+/* Newsreader display serif for academic-style headlines */
+.font-display-serif {
+  font-family: 'Newsreader', Georgia, Cambria, "Times New Roman", Times, serif;
+}
 
 /* Design system variables for light and dark themes */
 :root {
@@ -107,3 +117,131 @@ body, header, input, select, button, table, thead, tbody, tr, th, td, .card, .ba
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
+
+/* Glassmorphism styling rules */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(16px) saturate(120%);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 8px 32px 0 rgba(148, 163, 184, 0.08);
+}
+
+.dark .glass-panel {
+  background: rgba(15, 23, 42, 0.35);
+  backdrop-filter: blur(16px) saturate(120%);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+}
+
+.glass-panel-hover {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-panel-hover:hover {
+  transform: translateY(-6px) scale(1.01);
+  border-color: rgba(13, 148, 136, 0.3);
+  box-shadow: 0 12px 40px 0 rgba(13, 148, 136, 0.1);
+}
+
+.dark .glass-panel-hover:hover {
+  border-color: rgba(45, 212, 191, 0.2);
+  box-shadow: 0 12px 40px 0 rgba(45, 212, 191, 0.08);
+}
+
+/* Glass shine reflection sweep */
+.glass-panel-hover {
+  position: relative;
+  overflow: hidden;
+}
+
+.glass-panel-hover::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -60%;
+  width: 30%;
+  height: 200%;
+  background: linear-gradient(
+    to right,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.08) 30%,
+    rgba(255, 255, 255, 0.18) 50%,
+    rgba(255, 255, 255, 0.08) 70%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  transform: rotate(30deg);
+  transition: all 0.75s ease;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.glass-panel-hover:hover::after {
+  left: 130%;
+  opacity: 1;
+}
+
+/* Dynamic floating sways (slowed down for calm intelligence) */
+@keyframes floatSway {
+  0% { transform: translate(0px, 0px) rotate(0deg); }
+  50% { transform: translate(6px, -10px) rotate(90deg); }
+  100% { transform: translate(0px, 0px) rotate(180deg); }
+}
+
+.animate-float-sway-slow {
+  animation: floatSway 45s infinite ease-in-out;
+}
+
+.animate-float-sway-slower {
+  animation: floatSway 60s infinite ease-in-out;
+}
+
+/* Breathing node scaling (opacity/scale pulse on a 3-4s cycle) */
+@keyframes breathe {
+  0% { transform: scale(1); opacity: 0.55; }
+  50% { transform: scale(1.03); opacity: 0.85; }
+  100% { transform: scale(1); opacity: 0.55; }
+}
+
+.animate-breathe {
+  animation: breathe 3.5s infinite ease-in-out;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+
+/* Laser sweep keyframe */
+@keyframes laserScan {
+  0% { left: 0%; opacity: 0; }
+  10% { opacity: 0.8; }
+  90% { opacity: 0.8; }
+  100% { left: 100%; opacity: 0; }
+}
+
+.animate-laser-scan {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(to right, transparent, rgba(45, 212, 191, 0.5), transparent);
+  box-shadow: 0 0 8px rgba(45, 212, 191, 0.8);
+  animation: laserScan 4s infinite linear;
+}
+
+
+@keyframes laserScan {
+  0% { left: 0%; opacity: 0; }
+  10% { opacity: 0.8; }
+  90% { opacity: 0.8; }
+  100% { left: 100%; opacity: 0; }
+}
+
+.animate-laser-scan {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(to right, transparent, rgba(45, 212, 191, 0.5), transparent);
+  box-shadow: 0 0 8px rgba(45, 212, 191, 0.8);
+  animation: laserScan 4s infinite linear;
+}
+
+
