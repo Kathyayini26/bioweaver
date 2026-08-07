@@ -1,0 +1,247 @@
+@import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,600;0,6..72,700;1,6..72,400&display=swap');
+@import "tailwindcss";
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* Enable class-based dark mode strategy in Tailwind CSS v4 */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Newsreader display serif for academic-style headlines */
+.font-display-serif {
+  font-family: 'Newsreader', Georgia, Cambria, "Times New Roman", Times, serif;
+}
+
+/* Design system variables for light and dark themes */
+:root {
+  /* LIGHT THEME: Clean clinical healthcare application */
+  --workspace-bg: #f8fafc; /* slate-50 */
+  --header-bg: #ffffff;
+  --header-border: #e2e8f0; /* slate-200 */
+  
+  --card-bg: #ffffff;
+  --card-border: #e2e8f0; /* slate-200 */
+  --card-shadow: 0 1px 2px 0 rgba(15, 23, 42, 0.05); /* flat/subtle shadow */
+  
+  --text-primary: #0f172a; /* slate-900 */
+  --text-secondary: #475569; /* slate-600 */
+  
+  --graph-bg: #ffffff; /* Pure white canvas */
+  --grid-dot: rgba(148, 163, 184, 0.16); /* slate-300 light dots */
+  --graph-node-gene: #0d9488; /* Teal-600 */
+  --graph-node-disease: #64748b; /* Slate-500 */
+  --graph-edge: #e2e8f0; /* Light gray edges */
+  --graph-edge-highlight: #0d9488; /* Teal-600 */
+  --graph-label: #0f172a; /* Slate-900 */
+  --graph-border: #e2e8f0;
+}
+
+.dark {
+  /* DARK THEME: Premium scientific research workstation */
+  --workspace-bg: #020617; /* Slate-950 */
+  --header-bg: #010409; /* Slightly darker than slate-900 cards */
+  --header-border: #1e293b; /* slate-800 */
+  
+  --card-bg: #0f172a; /* Slate-900 */
+  --card-border: #1e293b; /* slate-800 */
+  --card-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.4); /* floating shadow */
+  
+  --text-primary: #ffffff;
+  --text-secondary: #94a3b8; /* Slate-400 */
+  
+  --graph-bg: #020617; /* Slate-950 canvas */
+  --grid-dot: rgba(100, 116, 139, 0.25); /* Subtle blue-gray dots */
+  --graph-node-gene: #2dd4bf; /* Bright teal #2DD4BF */
+  --graph-node-disease: #64748b; /* Blue-gray slate-500 */
+  --graph-edge: #1e293b; /* Slate-800 edges */
+  --graph-edge-highlight: #2dd4bf; /* Bright teal highlight */
+  --graph-label: #cbd5e1; /* Slate-300 */
+  --graph-border: #1e293b;
+}
+
+/* Base styles and overrides */
+body {
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  background-color: var(--workspace-bg);
+  color: var(--text-primary);
+}
+
+/* Custom grid cols utility */
+.grid-cols-16 {
+  display: grid;
+  grid-template-columns: repeat(16, minmax(0, 1fr));
+}
+
+/* Precise 250ms smooth transition interpolations for theme updates */
+/* Exclude general div, circle, and line nodes to resolve coordinate transition conflicts/vibration */
+body, header, input, select, button, table, thead, tbody, tr, th, td, .card, .badge {
+  transition: background-color 250ms ease-in-out, 
+              border-color 250ms ease-in-out, 
+              color 250ms ease-in-out, 
+              box-shadow 250ms ease-in-out;
+}
+
+/* Pulse glow for active node spotlight */
+@keyframes pulseGlow {
+  0% {
+    r: 12px;
+    opacity: 0.6;
+  }
+  50% {
+    r: 25px;
+    opacity: 0.15;
+  }
+  100% {
+    r: 12px;
+    opacity: 0.6;
+  }
+}
+
+.selected-glow {
+  animation: pulseGlow 3s infinite ease-in-out;
+}
+
+/* Transition class for SVG nodes */
+.svg-node {
+  transition: r 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Theme toggle slow rotation spinner */
+.animate-spin-slow {
+  animation: spin 8s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Glassmorphism styling rules */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(16px) saturate(120%);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 8px 32px 0 rgba(148, 163, 184, 0.08);
+}
+
+.dark .glass-panel {
+  background: rgba(15, 23, 42, 0.35);
+  backdrop-filter: blur(16px) saturate(120%);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+}
+
+.glass-panel-hover {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-panel-hover:hover {
+  transform: translateY(-6px) scale(1.01);
+  border-color: rgba(13, 148, 136, 0.3);
+  box-shadow: 0 12px 40px 0 rgba(13, 148, 136, 0.1);
+}
+
+.dark .glass-panel-hover:hover {
+  border-color: rgba(45, 212, 191, 0.2);
+  box-shadow: 0 12px 40px 0 rgba(45, 212, 191, 0.08);
+}
+
+/* Glass shine reflection sweep */
+.glass-panel-hover {
+  position: relative;
+  overflow: hidden;
+}
+
+.glass-panel-hover::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -60%;
+  width: 30%;
+  height: 200%;
+  background: linear-gradient(
+    to right,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.08) 30%,
+    rgba(255, 255, 255, 0.18) 50%,
+    rgba(255, 255, 255, 0.08) 70%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  transform: rotate(30deg);
+  transition: all 0.75s ease;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.glass-panel-hover:hover::after {
+  left: 130%;
+  opacity: 1;
+}
+
+/* Dynamic floating sways (slowed down for calm intelligence) */
+@keyframes floatSway {
+  0% { transform: translate(0px, 0px) rotate(0deg); }
+  50% { transform: translate(6px, -10px) rotate(90deg); }
+  100% { transform: translate(0px, 0px) rotate(180deg); }
+}
+
+.animate-float-sway-slow {
+  animation: floatSway 45s infinite ease-in-out;
+}
+
+.animate-float-sway-slower {
+  animation: floatSway 60s infinite ease-in-out;
+}
+
+/* Breathing node scaling (opacity/scale pulse on a 3-4s cycle) */
+@keyframes breathe {
+  0% { transform: scale(1); opacity: 0.55; }
+  50% { transform: scale(1.03); opacity: 0.85; }
+  100% { transform: scale(1); opacity: 0.55; }
+}
+
+.animate-breathe {
+  animation: breathe 3.5s infinite ease-in-out;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+
+/* Laser sweep keyframe */
+@keyframes laserScan {
+  0% { left: 0%; opacity: 0; }
+  10% { opacity: 0.8; }
+  90% { opacity: 0.8; }
+  100% { left: 100%; opacity: 0; }
+}
+
+.animate-laser-scan {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(to right, transparent, rgba(45, 212, 191, 0.5), transparent);
+  box-shadow: 0 0 8px rgba(45, 212, 191, 0.8);
+  animation: laserScan 4s infinite linear;
+}
+
+
+@keyframes laserScan {
+  0% { left: 0%; opacity: 0; }
+  10% { opacity: 0.8; }
+  90% { opacity: 0.8; }
+  100% { left: 100%; opacity: 0; }
+}
+
+.animate-laser-scan {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(to right, transparent, rgba(45, 212, 191, 0.5), transparent);
+  box-shadow: 0 0 8px rgba(45, 212, 191, 0.8);
+  animation: laserScan 4s infinite linear;
+}
+
+
