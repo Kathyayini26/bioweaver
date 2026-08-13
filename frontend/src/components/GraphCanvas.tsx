@@ -1,24 +1,102 @@
 import { useState, useEffect, useRef } from 'react';
 import type { SubgraphData } from '../types';
 import { Button } from './ui/button';
-import { ZoomIn, ZoomOut, RotateCcw, HelpCircle } from 'lucide-react';
+import { RotateCcw, HelpCircle } from 'lucide-react';
 import * as d3 from 'd3';
 
 interface SimulationNode extends d3.SimulationNodeDatum {
   id: string;
   label: string;
-  type: 'gene' | 'disease';
+  type: 'gene' | 'disease' | 'pathway' | 'protein' | 'chemical' | string;
 }
 
 interface SimulationLink extends d3.SimulationLinkDatum<SimulationNode> {
-  source: string | SimulationNode;
-  target: string | SimulationNode;
+  source: string;
+  target: string;
   predicate: string;
   score: number;
 }
 
+// Deterministic force-directed collision resolution to maintain minimum 120px node center distance
+const resolveCollisions = (nodes: SimulationNode[], minDistance = 120) => {
+  const n = nodes.length;
+  for (let iter = 0; iter < 6; iter++) {
+    let shifted = false;
+    for (let i = 0; i < n; i++) {
+      const nodeA = nodes[i];
+      if (nodeA.x === undefined || nodeA.y === undefined) continue;
+
+      for (let j = i + 1; j < n; j++) {
+        const nodeB = nodes[j];
+        if (nodeB.x === undefined || nodeB.y === undefined) continue;
+
+        const dx = nodeB.x - nodeA.x;
+        const dy = nodeB.y - nodeA.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+
+        if (dist < minDistance) {
+          const overlap = minDistance - dist;
+          const pushX = dist > 1 ? (dx / dist) * overlap : (Math.random() - 0.5) * overlap;
+          const pushY = dist > 1 ? (dy / dist) * overlap : (Math.random() - 0.5) * overlap;
+
+          const isACenter = nodeA.fx !== undefined;
+          const isBCenter = nodeB.fx !== undefined;
+
+          if (isACenter && !isBCenter) {
+            nodeB.x += pushX;
+            nodeB.y += pushY;
+          } else if (isBCenter && !isACenter) {
+            nodeA.x -= pushX;
+            nodeA.y -= pushY;
+          } else if (!isACenter && !isBCenter) {
+            nodeA.x -= pushX * 0.5;
+            nodeA.y -= pushY * 0.5;
+            nodeB.x += pushX * 0.5;
+            nodeB.y += pushY * 0.5;
+          }
+          shifted = true;
+        }
+      }
+    }
+    if (!shifted) break;
+  }
+};
+
+// Dynamic label collision avoidance with offsets (alternates above/below)
+const getLabelOffset = (node: SimulationNode, allNodes: SimulationNode[], isCenter: boolean) => {
+  if (node.x === undefined || node.y === undefined) return { y: 20 };
+  const defaultY = isCenter ? 25 : 20;
+
+  let hasNearbyCollision = false;
+  let alternate = false;
+
+  for (const other of allNodes) {
+    if (other.id === node.id || other.x === undefined || other.y === undefined) continue;
+
+    const dx = Math.abs(node.x - other.x);
+    const dy = Math.abs(node.y - other.y);
+
+    // If nodes are close horizontally (< 110px) and close vertically (< 45px)
+    if (dx < 110 && dy < 45) {
+      hasNearbyCollision = true;
+      if (node.id < other.id) {
+        alternate = true;
+      }
+      break;
+    }
+  }
+
+  if (hasNearbyCollision && alternate) {
+    // Render label above node
+    return { y: -16 };
+  }
+  return { y: defaultY };
+};
+
 interface GraphCanvasProps {
   subgraph: SubgraphData;
+  centerNode: string | null;
+  focusedNode: string | null;
   onNodeClick: (nodeLabel: string) => void;
   onNodeDoubleClick: (nodeLabel: string) => void;
   minScore: number;
@@ -27,6 +105,8 @@ interface GraphCanvasProps {
 
 export function GraphCanvas({ 
   subgraph, 
+  centerNode,
+  focusedNode,
   onNodeClick, 
   onNodeDoubleClick, 
   minScore, 
@@ -38,10 +118,16 @@ export function GraphCanvas({
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   
   const simulationRef = useRef<d3.Simulation<SimulationNode, SimulationLink> | null>(null);
   const prevPositionsRef = useRef<Record<string, { x: number; y: number }>>({});
+
+  // Eased target references for requestAnimationFrame interpolation
+  const targetZoomRef = useRef(1);
+  const targetPanRef = useRef({ x: 0, y: 0 });
+  const currentZoomRef = useRef(1);
+  const currentPanRef = useRef({ x: 0, y: 0 });
+  const dragStartRef = useRef({ x: 0, y: 0 });
 
   // Safe type-guard extraction of D3 link node IDs
   const getLinkId = (node: string | SimulationNode): string => {
@@ -109,6 +195,7 @@ export function GraphCanvas({
         .strength(0.04)
       )
       .force('charge', d3.forceManyBody().strength(-180))
+      .force('collide', d3.forceCollide<SimulationNode>().radius(65).strength(0.8).iterations(3))
       .force('center', d3.forceCenter(centerX, centerY))
       .force('x', d3.forceX(centerX).strength(0.015))
       .force('y', d3.forceY(centerY).strength(0.015));
@@ -123,6 +210,9 @@ export function GraphCanvas({
     simulationRef.current = sim;
 
     sim.on('tick', () => {
+      // Deterministically resolve collisions to maintain 120px minimum spacing
+      resolveCollisions(simNodes, 120);
+
       simNodes.forEach(node => {
         if (node.x !== undefined && node.y !== undefined) {
           prevPositions[node.id] = { x: node.x, y: node.y };
@@ -144,68 +234,226 @@ export function GraphCanvas({
     }
   }, [minScore]);
 
+  // Buttery-smooth LERP rendering loop at 60 FPS
+  useEffect(() => {
+    let animId: number;
+
+    const tick = () => {
+      const ease = 0.15; // interpolation factor
+      
+      const nextZoom = currentZoomRef.current + (targetZoomRef.current - currentZoomRef.current) * ease;
+      const nextPanX = currentPanRef.current.x + (targetPanRef.current.x - currentPanRef.current.x) * ease;
+      const nextPanY = currentPanRef.current.y + (targetPanRef.current.y - currentPanRef.current.y) * ease;
+      
+      let changed = false;
+
+      if (Math.abs(nextZoom - currentZoomRef.current) > 0.0005) {
+        currentZoomRef.current = nextZoom;
+        changed = true;
+      } else {
+        currentZoomRef.current = targetZoomRef.current;
+      }
+
+      if (Math.abs(nextPanX - currentPanRef.current.x) > 0.02 || Math.abs(nextPanY - currentPanRef.current.y) > 0.02) {
+        currentPanRef.current = { x: nextPanX, y: nextPanY };
+        changed = true;
+      } else {
+        currentPanRef.current = targetPanRef.current;
+      }
+
+      if (changed) {
+        setZoom(currentZoomRef.current);
+        setPan({ x: currentPanRef.current.x, y: currentPanRef.current.y });
+      }
+
+      animId = requestAnimationFrame(tick);
+    };
+
+    animId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(animId);
+  }, []);
+
+  // Reset target scales when subgraph changes
+  useEffect(() => {
+    targetZoomRef.current = 1.0;
+    targetPanRef.current = { x: 0, y: 0 };
+    currentZoomRef.current = 1.0;
+    currentPanRef.current = { x: 0, y: 0 };
+    setZoom(1.0);
+    setPan({ x: 0, y: 0 });
+  }, [subgraph]);
+
   const handleZoom = (direction: 'in' | 'out' | 'reset') => {
-    if (direction === 'in') setZoom(z => Math.min(2.5, z + 0.2));
-    else if (direction === 'out') setZoom(z => Math.max(0.4, z - 0.2));
-    else {
-      setZoom(1);
-      setPan({ x: 0, y: 0 });
+    const mx = 350;
+    const my = 250;
+    const currentTargetZoom = targetZoomRef.current;
+    
+    if (direction === 'in') {
+      const newZ = Math.min(2.5, currentTargetZoom + 0.3);
+      const ratio = newZ / currentTargetZoom;
+      targetPanRef.current = {
+        x: mx - (mx - targetPanRef.current.x) * ratio,
+        y: my - (my - targetPanRef.current.y) * ratio
+      };
+      targetZoomRef.current = newZ;
+    } else if (direction === 'out') {
+      const newZ = Math.max(0.4, currentTargetZoom - 0.3);
+      const ratio = newZ / currentTargetZoom;
+      targetPanRef.current = {
+        x: mx - (mx - targetPanRef.current.x) * ratio,
+        y: my - (my - targetPanRef.current.y) * ratio
+      };
+      targetZoomRef.current = newZ;
+    } else {
+      targetZoomRef.current = 1.0;
+      targetPanRef.current = { x: 0, y: 0 };
     }
   };
 
   const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
     e.preventDefault();
+    
+    // Smoothly anchor zoom relative to mouse coordinates
+    const rect = e.currentTarget.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    
+    const zoomFactor = 0.08;
+    const currentTargetZoom = targetZoomRef.current;
+    
+    let newZ = currentTargetZoom;
     if (e.deltaY < 0) {
-      setZoom(z => Math.min(2.5, z + 0.06));
+      newZ = Math.min(2.5, currentTargetZoom + zoomFactor);
     } else {
-      setZoom(z => Math.max(0.4, z - 0.06));
+      newZ = Math.max(0.4, currentTargetZoom - zoomFactor);
+    }
+    
+    if (newZ !== currentTargetZoom) {
+      const ratio = newZ / currentTargetZoom;
+      targetPanRef.current = {
+        x: mx - (mx - targetPanRef.current.x) * ratio,
+        y: my - (my - targetPanRef.current.y) * ratio
+      };
+      targetZoomRef.current = newZ;
     }
   };
 
   const handleMouseDown = (e: React.MouseEvent<SVGSVGElement, MouseEvent>) => {
     setIsDragging(true);
-    setDragStart({
-      x: e.clientX - pan.x,
-      y: e.clientY - pan.y
-    });
+    dragStartRef.current = {
+      x: e.clientX - targetPanRef.current.x,
+      y: e.clientY - targetPanRef.current.y
+    };
   };
 
   const handleMouseMove = (e: React.MouseEvent<SVGSVGElement, MouseEvent>) => {
     if (!isDragging) return;
-    setPan({
-      x: e.clientX - dragStart.x,
-      y: e.clientY - dragStart.y
-    });
+    targetPanRef.current = {
+      x: e.clientX - dragStartRef.current.x,
+      y: e.clientY - dragStartRef.current.y
+    };
   };
 
   const handleMouseUp = () => {
     setIsDragging(false);
   };
 
-  // Center viewport on selected node smoothly on click
+  // Center viewport smoothly on clicked node
   const handleNodeClick = (node: SimulationNode) => {
     onNodeClick(node.label);
     if (node.x !== undefined && node.y !== undefined) {
       const centerX = 350;
       const centerY = 250;
-      setPan({
-        x: centerX - node.x,
-        y: centerY - node.y
-      });
+      const targetZoom = 1.35; // zoom in on node focus
+      targetZoomRef.current = targetZoom;
+      targetPanRef.current = {
+        x: centerX - node.x * targetZoom,
+        y: centerY - node.y * targetZoom
+      };
     }
   };
 
-  // Double click centers and loads new neighborhood subgraph
+  // Double click centers and walks to new neighborhood subgraph
   const handleNodeDoubleClick = (node: SimulationNode) => {
     if (node.x !== undefined && node.y !== undefined) {
       const centerX = 350;
       const centerY = 250;
-      setPan({
-        x: centerX - node.x,
-        y: centerY - node.y
-      });
+      const targetZoom = 1.0; // reset zoom for center node
+      targetZoomRef.current = targetZoom;
+      targetPanRef.current = {
+        x: centerX - node.x * targetZoom,
+        y: centerY - node.y * targetZoom
+      };
     }
     onNodeDoubleClick(node.label);
+  };
+
+  // Dynamic color selection per biological entity type
+  const getNodeColor = (type: string) => {
+    if (type === 'gene') return 'var(--graph-node-gene)';
+    if (type === 'pathway') return 'var(--graph-node-pathway)';
+    return 'var(--graph-node-disease)'; // default: Disease & others (Gray)
+  };
+
+  // Dynamic edge style per relationship predicate and target node type
+  const getEdgeStyle = (predicate: string, targetType?: string) => {
+    const cleanPred = predicate.toLowerCase().replace('biolink:', '');
+    
+    // 1. Biological Pathway Link (Purple dotted/dashed line)
+    if (
+      targetType === 'pathway' || 
+      cleanPred === 'participates_in' || 
+      cleanPred === 'participates-in' || 
+      cleanPred === 'pathway_link'
+    ) {
+      return {
+        strokeDasharray: '2,4',
+        stroke: 'var(--graph-node-pathway)',
+        strokeWidth: 1.8,
+        opacity: 0.9
+      };
+    }
+    
+    // 2. Gene-Gene PPI Interaction (Teal dotted line)
+    if (
+      targetType === 'gene' || 
+      cleanPred === 'interacts_with' || 
+      cleanPred === 'interacts-with' || 
+      cleanPred === 'protein-interaction' || 
+      cleanPred === 'protein_interaction' || 
+      cleanPred === 'ppi'
+    ) {
+      return {
+        strokeDasharray: '4,4',
+        stroke: 'var(--graph-node-gene)',
+        strokeWidth: 1.5,
+        opacity: 0.85
+      };
+    }
+    
+    // 3. Gene-Disease Causal / Association link (Solid line)
+    if (
+      targetType === 'disease' || 
+      cleanPred === 'causes' || 
+      cleanPred === 'associated_with' || 
+      cleanPred === 'associated-with' || 
+      cleanPred === 'associated_with_increased_likelihood_of'
+    ) {
+      return {
+        strokeDasharray: 'none',
+        stroke: 'var(--graph-node-disease)',
+        strokeWidth: 2.0,
+        opacity: 0.95
+      };
+    }
+
+    // Default fallback
+    return {
+      strokeDasharray: 'none',
+      stroke: 'var(--graph-edge)',
+      strokeWidth: 1.2,
+      opacity: 0.65
+    };
   };
 
   // Hover highlights
@@ -218,6 +466,21 @@ export function GraphCanvas({
       if (sId === hoveredNode) connectedNodeIds.add(tId || '');
       if (tId === hoveredNode) connectedNodeIds.add(sId || '');
     });
+  }
+
+  // Find all adjacent nodes to the focused node to highlight structural context
+  const adjacentNodeIds = new Set<string>();
+  if (focusedNode) {
+    const fNode = nodes.find(n => n.label === focusedNode);
+    if (fNode) {
+      adjacentNodeIds.add(fNode.id);
+      edges.forEach(edge => {
+        const sId = getLinkId(edge.source);
+        const tId = getLinkId(edge.target);
+        if (sId === fNode.id) adjacentNodeIds.add(tId || '');
+        if (tId === fNode.id) adjacentNodeIds.add(sId || '');
+      });
+    }
   }
 
   // Active status checker based on score slider
@@ -234,6 +497,19 @@ export function GraphCanvas({
       return hasCenter && hasNode && edge.score >= minScore;
     });
   };
+
+  // Filter out any nodes that do not have at least one visible connection under the current score threshold
+  const visibleNodes = nodes.filter(node => {
+    if (node.id === subgraph.center.id) return true;
+    
+    // Check if there is at least one active edge with score >= minScore connecting this node
+    return edges.some(edge => {
+      const sId = getLinkId(edge.source);
+      const tId = getLinkId(edge.target);
+      const isConnected = sId === node.id || tId === node.id;
+      return isConnected && edge.score >= minScore;
+    });
+  });
 
   return (
     <div className="flex-1 flex flex-col bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded overflow-hidden relative transition-all duration-300">
@@ -257,25 +533,50 @@ export function GraphCanvas({
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5">
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            className="h-7 w-7 p-0 cursor-pointer" 
-            onClick={() => handleZoom('in')}
-            title="Zoom In"
-          >
-            <ZoomIn className="h-3.5 w-3.5" />
-          </Button>
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            className="h-7 w-7 p-0 cursor-pointer" 
-            onClick={() => handleZoom('out')}
-            title="Zoom Out"
-          >
-            <ZoomOut className="h-3.5 w-3.5" />
-          </Button>
+        <div className="flex items-center gap-3">
+          {/* Word/Document style Zoom controls: [-] ----o---- [+] 100% */}
+          <div className="flex items-center gap-2 border-r border-slate-200 dark:border-slate-800 pr-3">
+            <button 
+              type="button"
+              onClick={() => handleZoom('out')}
+              className="w-5 h-5 flex items-center justify-center text-sm font-bold text-slate-500 hover:text-slate-850 dark:text-slate-400 dark:hover:text-slate-100 bg-slate-100 hover:bg-slate-200 dark:bg-slate-905 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded select-none cursor-pointer leading-none"
+              title="Zoom Out"
+            >
+              −
+            </button>
+            <input
+              type="range"
+              min="0.4"
+              max="2.5"
+              step="0.02"
+              value={zoom}
+              onChange={(e) => {
+                const newZ = parseFloat(e.target.value);
+                const mx = 350;
+                const my = 250;
+                const ratio = newZ / targetZoomRef.current;
+                targetPanRef.current = {
+                  x: mx - (mx - targetPanRef.current.x) * ratio,
+                  y: my - (my - targetPanRef.current.y) * ratio
+                };
+                targetZoomRef.current = newZ;
+              }}
+              className="w-20 accent-teal-600 dark:accent-teal-400 cursor-pointer h-1"
+              title="Zoom scale slider"
+            />
+            <button 
+              type="button"
+              onClick={() => handleZoom('in')}
+              className="w-5 h-5 flex items-center justify-center text-sm font-bold text-slate-500 hover:text-slate-850 dark:text-slate-400 dark:hover:text-slate-100 bg-slate-100 hover:bg-slate-200 dark:bg-slate-905 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded select-none cursor-pointer leading-none"
+              title="Zoom In"
+            >
+              +
+            </button>
+            <span className="font-mono text-[10px] w-9 text-right text-slate-500 dark:text-slate-400 font-bold select-none">
+              {Math.round(zoom * 100)}%
+            </span>
+          </div>
+
           <Button 
             variant="ghost" 
             size="sm" 
@@ -306,13 +607,25 @@ export function GraphCanvas({
             <pattern id="dotGrid" width="24" height="24" patternUnits="userSpaceOnUse">
               <circle cx="2" cy="2" r="1.2" fill="var(--grid-dot)" />
             </pattern>
+            <filter id="glow-soft" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="1.6" result="blur" />
+              <feColorMatrix type="matrix" values="
+                1  0  0  0  0
+                0  1  0  0  0
+                0  0  1  0  0
+                0  0  0  2.2 0
+              " />
+              <feMerge>
+                <feMergeNode />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
           </defs>
           <rect width="100%" height="100%" fill="url(#dotGrid)" pointerEvents="none" />
 
-          {/* Pan and Zoom Layer - Easing transition */}
+          {/* Pan and Zoom Layer - Easing managed in LERP physics loop */}
           <g
             transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}
-            style={{ transition: isDragging ? 'none' : 'transform 0.45s cubic-bezier(0.1, 0.9, 0.2, 1)' }}
           >
             {/* Draw Links */}
             {edges.map((edge, idx) => {
@@ -326,29 +639,99 @@ export function GraphCanvas({
               const isHighlighted = hoveredNode 
                 ? sId === hoveredNode || tId === hoveredNode
                 : false;
-              const isDashed = edge.predicate === 'protein-interaction';
-
+              const edgeStyle = getEdgeStyle(edge.predicate, targetNode.type);
+              
               // Hide connections below the score threshold smoothly
               const isBelowThreshold = edge.score < minScore;
               if (isBelowThreshold) return null;
 
-              const opacity = hoveredNode 
-                ? isHighlighted ? 0.95 : 0.05 
-                : 0.35;
+              // Check if edge lies on the active path between center gene and clicked disease node
+              const isSignal = focusedNode && focusedNode !== centerNode && (
+                (sourceNode.label === centerNode && targetNode.label === focusedNode) ||
+                (targetNode.label === centerNode && sourceNode.label === focusedNode)
+              );
+
+              const pathId = `flow-path-${idx}`;
+              const isSourceCenter = sourceNode.label === centerNode;
+
+              // Compute smooth curved Bézier coordinates
+              const sx = sourceNode.x ?? 0;
+              const sy = sourceNode.y ?? 0;
+              const tx = targetNode.x ?? 0;
+              const ty = targetNode.y ?? 0;
+
+              const dx = tx - sx;
+              const dy = ty - sy;
+              const mx = (sx + tx) / 2;
+              const my = (sy + ty) / 2;
+              const curveStrength = 32; // curvature offset height
+              const len = Math.sqrt(dx * dx + dy * dy) || 1;
+              const px = -dy / len;
+              const py = dx / len;
+              const cx = mx + px * curveStrength;
+              const cy = my + py * curveStrength;
+
+              const pathD = isSourceCenter 
+                ? `M ${sx} ${sy} Q ${cx} ${cy} ${tx} ${ty}` 
+                : `M ${tx} ${ty} Q ${cx} ${cy} ${sx} ${sy}`;
 
               return (
                 <g key={idx}>
-                  <line
-                    x1={sourceNode.x}
-                    y1={sourceNode.y}
-                    x2={targetNode.x}
-                    y2={targetNode.y}
-                    stroke={isHighlighted ? 'var(--graph-edge-highlight)' : 'var(--graph-edge)'}
-                    strokeWidth={isHighlighted ? 2.5 : 1.2}
-                    strokeDasharray={isDashed ? '4,4' : undefined}
-                    strokeOpacity={opacity}
-                    className="svg-edge transition-all duration-300"
-                  />
+                  {isSignal ? (
+                    <path 
+                      id={pathId}
+                      d={pathD}
+                      fill="none"
+                      stroke="var(--graph-node-gene)"
+                      strokeWidth={2.4}
+                      strokeOpacity={0.8}
+                      className="svg-edge transition-all duration-300"
+                    />
+                  ) : (
+                    <line
+                      x1={sourceNode.x}
+                      y1={sourceNode.y}
+                      x2={targetNode.x}
+                      y2={targetNode.y}
+                      stroke={isHighlighted ? 'var(--graph-edge-highlight)' : edgeStyle.stroke}
+                      strokeWidth={isHighlighted ? 2.5 : edgeStyle.strokeWidth}
+                      strokeDasharray={isHighlighted ? undefined : edgeStyle.strokeDasharray}
+                      strokeOpacity={isHighlighted ? 0.95 : (hoveredNode ? 0.05 : edgeStyle.opacity)}
+                      className="svg-edge transition-all duration-300"
+                    />
+                  )}
+                  {isSignal && [0, 1, 2, 3].map((pIdx) => {
+                    const delay = pIdx * 0.9;
+                    const duration = 3.6;
+                    return (
+                      <circle 
+                        key={pIdx} 
+                        r="2.0" 
+                        fill="var(--graph-node-gene)" 
+                        filter="url(#glow-soft)"
+                        style={{ pointerEvents: 'none' }}
+                      >
+                        <animateMotion
+                          dur={`${duration}s`}
+                          repeatCount="indefinite"
+                          begin={`${delay}s`}
+                          calcMode="spline"
+                          keyTimes="0;1"
+                          keySplines="0.42 0 0.58 1"
+                        >
+                          <mpath href={`#${pathId}`} />
+                        </animateMotion>
+                        <animate
+                          attributeName="opacity"
+                          values="0;0.95;0.95;0"
+                          keyTimes="0;0.15;0.85;1"
+                          dur={`${duration}s`}
+                          repeatCount="indefinite"
+                          begin={`${delay}s`}
+                        />
+                      </circle>
+                    );
+                  })}
                   {isHighlighted && (
                     <text
                       x={((sourceNode.x ?? 0) + (targetNode.x ?? 0)) / 2}
@@ -367,13 +750,27 @@ export function GraphCanvas({
             })}
 
             {/* Draw Nodes */}
-            {nodes.map(node => {
+            {visibleNodes.map(node => {
               const isCenter = node.id === subgraph.center.id;
               const isHovered = hoveredNode === node.id;
               const active = isNodeActive(node);
+              const labelOffset = getLabelOffset(node, visibleNodes, isCenter);
 
               // Smooth transition fade-out/fade-in based on threshold slider active status
-              const baseOpacity = active ? (hoveredNode ? (connectedNodeIds.has(node.id) ? 1.0 : 0.2) : 1.0) : 0.0;
+              const hasFocusHighlight = focusedNode && focusedNode !== centerNode;
+              const isAdjacentToFocus = focusedNode ? (
+                node.label === focusedNode || adjacentNodeIds.has(node.id)
+              ) : false;
+
+              const baseOpacity = active 
+                ? (hoveredNode 
+                    ? (connectedNodeIds.has(node.id) ? 1.0 : 0.15) 
+                    : (hasFocusHighlight 
+                        ? (isAdjacentToFocus ? 1.0 : 0.35) 
+                        : 1.0
+                      )
+                  ) 
+                : 0.0;
               const pointerEvents = active ? 'auto' : 'none';
 
               return (
@@ -398,8 +795,22 @@ export function GraphCanvas({
                       cx={node.x}
                       cy={node.y}
                       r={12}
-                      fill={node.type === 'gene' ? 'var(--graph-node-gene)' : 'var(--graph-node-disease)'}
+                      fill={getNodeColor(node.type)}
                       className="selected-glow"
+                      pointerEvents="none"
+                    />
+                  )}
+
+                  {/* Selected node animated pulse ring */}
+                  {node.label === focusedNode && (
+                    <circle
+                      cx={node.x}
+                      cy={node.y}
+                      r={15}
+                      fill="none"
+                      stroke={getNodeColor(node.type)}
+                      strokeWidth="2"
+                      className="selected-disease-glow"
                       pointerEvents="none"
                     />
                   )}
@@ -411,7 +822,7 @@ export function GraphCanvas({
                       cy={node.y}
                       r={14}
                       fill="none"
-                      stroke={node.type === 'gene' ? 'var(--graph-node-gene)' : 'var(--graph-node-disease)'}
+                      stroke={getNodeColor(node.type)}
                       strokeWidth="1.5"
                       className="animate-ping"
                       opacity="0.5"
@@ -422,17 +833,17 @@ export function GraphCanvas({
                   <circle
                     cx={node.x}
                     cy={node.y}
-                    r={isCenter ? (isHovered ? 15 : 12) : (isHovered ? 12 : 9)}
-                    fill={node.type === 'gene' ? 'var(--graph-node-gene)' : 'var(--graph-node-disease)'}
-                    stroke={isCenter ? '#ffffff' : (isHovered ? 'var(--graph-label)' : 'transparent')}
+                    r={isCenter ? (isHovered ? 15 : 12) : (node.label === focusedNode ? 12 : (isHovered ? 12 : 9))}
+                    fill={getNodeColor(node.type)}
+                    stroke={isCenter ? '#ffffff' : (node.label === focusedNode ? getNodeColor(node.type) : (isHovered ? 'var(--graph-label)' : 'transparent'))}
                     strokeWidth={isCenter ? 2.5 : 1.5}
-                    className="shadow-sm svg-node"
+                    className={`shadow-sm svg-node ${isAdjacentToFocus && !isCenter ? 'node-ambient-glow' : ''}`}
                   />
 
                   {/* Label Text */}
                   <text
                     x={node.x}
-                    y={(node.y ?? 0) + (isCenter ? (isHovered ? 28 : 25) : (isHovered ? 23 : 20))}
+                    y={(node.y ?? 0) + labelOffset.y}
                     textAnchor="middle"
                     fontSize={isCenter ? '10' : '9'}
                     fontWeight={isCenter || isHovered ? 'bold' : '600'}
@@ -461,25 +872,35 @@ export function GraphCanvas({
       </div>
 
       {/* Graph Legend Overlay */}
-      <div className="absolute bottom-3 right-3 bg-white/90 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 px-3 py-1.5 rounded text-[10px] text-slate-500 font-medium space-y-1 z-10 transition-colors duration-400">
+      <div className="absolute bottom-3 right-3 bg-white/90 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 px-3 py-1.5 rounded text-[10px] text-slate-500 font-medium space-y-1.5 z-10 transition-colors duration-400">
         <div className="flex items-center gap-1.5">
-          <span className="font-bold text-slate-700 dark:text-slate-330">Graph Legend:</span>
+          <span className="font-bold text-slate-700 dark:text-slate-300">Graph Legend:</span>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: 'var(--graph-node-gene)' }} />
-          <span>Gene Entity</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: 'var(--graph-node-disease)' }} />
-          <span>Disease Entity</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-0.5" style={{ backgroundColor: 'var(--graph-edge)' }} />
-          <span>Association Link</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-0.5 border-b border-dashed" style={{ borderColor: 'var(--graph-edge)' }} />
-          <span>Protein Interaction (PPI)</span>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+          <div className="flex items-center gap-1">
+            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: 'var(--graph-node-gene)' }} />
+            <span>Gene</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: 'var(--graph-node-disease)' }} />
+            <span>Disease</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: 'var(--graph-node-pathway)' }} />
+            <span>Pathway</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-3.5 h-0.5 bg-slate-400 dark:bg-slate-650" />
+            <span>Association</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-3.5 h-0.5 border-b border-dashed border-teal-500" />
+            <span>PPI (Gene-Gene)</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-3.5 h-0.5 border-b border-dotted border-purple-500" />
+            <span>Pathway Link</span>
+          </div>
         </div>
       </div>
     </div>

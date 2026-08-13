@@ -126,43 +126,45 @@ export const mockAssociations: Array<{
 
 export const getMockTermDetails = (label: string): TermDetails | null => {
   const cleanLabel = label.trim();
-  const isGene = mockGenes.includes(cleanLabel.toUpperCase());
-  const isDisease = mockDiseases.some(d => d.toLowerCase() === cleanLabel.toLowerCase());
-
-  if (!isGene && !isDisease) return null;
-
-  if (isGene) {
-    const symbol = cleanLabel.toUpperCase();
-    const matches = mockAssociations.filter(a => a.gene.toUpperCase() === symbol);
-    const geneId = matches.length > 0 ? matches[0].geneId : `HGNC:MOCK_${symbol}`;
-
-    return {
-      id: geneId,
-      label: symbol,
-      type: 'gene',
-      description: `Homo sapiens gene ${symbol}. Mapped to high-dimensional representation vector utilizing graph walk pathways.`,
-      source: 'infores:hgnc',
-      degree: matches.length + 2,
-      isEmbedded: true,
-      embeddings: generateMockEmbedding(symbol)
-    };
-  } else {
-    // Disease term
-    const matched = mockDiseases.find(d => d.toLowerCase() === cleanLabel.toLowerCase()) || cleanLabel;
-    const matches = mockAssociations.filter(a => a.disease.toLowerCase() === matched.toLowerCase());
-    const diseaseId = matches.length > 0 ? matches[0].diseaseId : `MONDO:MOCK_${matched.toUpperCase().replace(/\s+/g, '_')}`;
-
-    return {
-      id: diseaseId,
-      label: matched,
-      type: 'disease',
-      description: `Pathology class ${matched}. Mapped in Monarch disease ontology hierarchies.`,
-      source: 'infores:mondo',
-      degree: matches.length,
-      isEmbedded: true,
-      embeddings: generateMockEmbedding(matched)
-    };
+  const symbol = cleanLabel.toUpperCase();
+  
+  // A gene symbol: all caps, no spaces, short (≤ 15 chars), not a disease string
+  // Examples: BRCA1, BARD1, RAD51, MYC, TP53
+  // Diseases have lowercase/spaces: "breast cancer", "Fanconi anemia..."
+  const looksLikeGene = /^[A-Z0-9\-]+$/.test(cleanLabel) && cleanLabel.length <= 15;
+  
+  let type = 'disease';
+  let id = `MONDO:MOCK_${symbol.replace(/\s+/g, '_')}`;
+  let description = `Pathology class ${cleanLabel}. Mapped in Monarch disease ontology hierarchies.`;
+  let source = 'infores:mondo';
+  
+  if (looksLikeGene || mockGenes.includes(symbol)) {
+    type = 'gene';
+    id = `HGNC:MOCK_${symbol}`;
+    description = `Homo sapiens gene ${symbol}. Mapped to high-dimensional representation vector utilizing graph walk pathways.`;
+    source = 'infores:hgnc';
+  } else if (cleanLabel.toLowerCase().includes('pathway')) {
+    type = 'pathway';
+    id = `REACT:MOCK_${symbol.replace(/\s+/g, '_')}`;
+    description = `Biological pathway ${cleanLabel}. Enriched via Reactome database annotations.`;
+    source = 'infores:reactome';
+  } else if (cleanLabel.toLowerCase().includes('protein')) {
+    type = 'protein';
+    id = `UNIPROT:MOCK_${symbol.replace(/\s+/g, '_')}`;
+    description = `Functional protein element ${cleanLabel}. Resolved from UniProt repository.`;
+    source = 'infores:uniprot';
   }
+  
+  return {
+    id,
+    label: type === 'gene' ? symbol : cleanLabel,
+    type,
+    description,
+    source,
+    degree: 5,
+    isEmbedded: true,
+    embeddings: generateMockEmbedding(cleanLabel)
+  };
 };
 
 export const getMockLocalSubgraph = (centerNodeLabel: string, minScore: number): SubgraphData | null => {
@@ -178,41 +180,109 @@ export const getMockLocalSubgraph = (centerNodeLabel: string, minScore: number):
   const adjNodes: SubgraphNode[] = [];
   const adjEdges: SubgraphEdge[] = [];
   const visitedNodeIds = new Set<string>([centerNode.id]);
+  const symbol = centerNodeLabel.trim().toUpperCase();
+
+  const customNeighbors: Record<string, Array<{ id: string; label: string; type: string; predicate: string; score: number }>> = {
+    HTT: [
+      { id: 'Huntington disease', label: 'Huntington disease', type: 'disease', predicate: 'biolink:causes', score: 0.92 },
+      { id: 'MYL2', label: 'MYL2', type: 'gene', predicate: 'protein-interaction', score: 0.81 },
+      { id: 'HNF1A', label: 'HNF1A', type: 'gene', predicate: 'protein-interaction', score: 0.77 },
+      { id: 'Apoptosis Pathway', label: 'Apoptosis Pathway', type: 'pathway', predicate: 'biolink:participates_in', score: 0.88 },
+      { id: 'HTT-associated protein', label: 'HTT-associated protein', type: 'protein', predicate: 'protein-interaction', score: 0.74 }
+    ],
+    BRCA1: [
+      { id: 'breast cancer', label: 'breast cancer', type: 'disease', predicate: 'biolink:associated_with_increased_likelihood_of', score: 0.98 },
+      { id: 'ovarian cancer', label: 'ovarian cancer', type: 'disease', predicate: 'biolink:associated_with_increased_likelihood_of', score: 0.94 },
+      { id: 'Fanconi anemia', label: 'Fanconi anemia', type: 'disease', predicate: 'biolink:causes', score: 0.88 },
+      { id: 'BARD1', label: 'BARD1', type: 'gene', predicate: 'protein-interaction', score: 0.91 },
+      { id: 'BRCA2', label: 'BRCA2', type: 'gene', predicate: 'protein-interaction', score: 0.85 },
+      { id: 'DNA Repair Pathway', label: 'DNA Repair Pathway', type: 'pathway', predicate: 'biolink:participates_in', score: 0.95 }
+    ],
+    BRCA2: [
+      { id: 'breast cancer', label: 'breast cancer', type: 'disease', predicate: 'biolink:associated_with_increased_likelihood_of', score: 0.97 },
+      { id: 'ovarian cancer', label: 'ovarian cancer', type: 'disease', predicate: 'biolink:associated_with_increased_likelihood_of', score: 0.90 },
+      { id: 'BRCA1', label: 'BRCA1', type: 'gene', predicate: 'protein-interaction', score: 0.85 },
+      { id: 'RAD51', label: 'RAD51', type: 'gene', predicate: 'protein-interaction', score: 0.88 },
+      { id: 'Homologous Recombination Pathway', label: 'Homologous Recombination Pathway', type: 'pathway', predicate: 'biolink:participates_in', score: 0.93 }
+    ],
+    TP53: [
+      { id: 'breast cancer', label: 'breast cancer', type: 'disease', predicate: 'biolink:associated_with_increased_likelihood_of', score: 0.95 },
+      { id: 'Li-Fraumeni syndrome', label: 'Li-Fraumeni syndrome', type: 'disease', predicate: 'biolink:causes', score: 0.99 },
+      { id: 'MDM2', label: 'MDM2', type: 'gene', predicate: 'protein-interaction', score: 0.92 },
+      { id: 'p53 Pathway', label: 'p53 Pathway', type: 'pathway', predicate: 'biolink:participates_in', score: 0.97 }
+    ]
+  };
 
   if (details.type === 'gene') {
-    // Find all connected diseases
-    const matches = mockAssociations.filter(
-      a => a.gene.toUpperCase() === details.label.toUpperCase() && a.score >= minScore
-    );
-    matches.forEach(m => {
-      if (!visitedNodeIds.has(m.disease)) {
-        visitedNodeIds.add(m.disease);
-        adjNodes.push({ id: m.disease, label: m.disease, type: 'disease' });
-      }
-      adjEdges.push({
-        source: details.label,
-        target: m.disease,
-        predicate: m.predicate,
-        score: m.score
+    const list = customNeighbors[symbol];
+    if (list) {
+      list.forEach(item => {
+        if (item.score >= minScore) {
+          if (!visitedNodeIds.has(item.id)) {
+            visitedNodeIds.add(item.id);
+            adjNodes.push({ id: item.id, label: item.label, type: item.type });
+          }
+          adjEdges.push({
+            source: symbol,
+            target: item.label,
+            predicate: item.predicate,
+            score: item.score
+          });
+        }
       });
-    });
+    } else {
+      // Dynamic fallback for other genes
+      const matches = mockAssociations.filter(
+        a => a.gene.toUpperCase() === symbol && a.score >= minScore
+      );
+      matches.forEach(m => {
+        if (!visitedNodeIds.has(m.disease)) {
+          visitedNodeIds.add(m.disease);
+          adjNodes.push({ id: m.disease, label: m.disease, type: 'disease' });
+        }
+        adjEdges.push({
+          source: symbol,
+          target: m.disease,
+          predicate: m.predicate,
+          score: m.score
+        });
+      });
 
-    // Mock 1-2 protein-protein interactions with other mock genes
-    const otherGenes = mockGenes.filter(g => g !== details.label).slice(0, 2);
-    otherGenes.forEach(g => {
-      if (!visitedNodeIds.has(g)) {
-        visitedNodeIds.add(g);
-        adjNodes.push({ id: g, label: g, type: 'gene' });
-      }
-      adjEdges.push({
-        source: details.label,
-        target: g,
-        predicate: 'protein-interaction',
-        score: 0.85
+      // PPI fallback
+      const otherGenes = mockGenes.filter(g => g !== symbol).slice(0, 2);
+      otherGenes.forEach((g, i) => {
+        const score = 0.85 - i * 0.05;
+        if (score >= minScore) {
+          if (!visitedNodeIds.has(g)) {
+            visitedNodeIds.add(g);
+            adjNodes.push({ id: g, label: g, type: 'gene' });
+          }
+          adjEdges.push({
+            source: symbol,
+            target: g,
+            predicate: 'protein-interaction',
+            score
+          });
+        }
       });
-    });
+
+      // Pathway fallback
+      const mockPathwayName = `${symbol} metabolic pathway`;
+      if (0.80 >= minScore) {
+        if (!visitedNodeIds.has(mockPathwayName)) {
+          visitedNodeIds.add(mockPathwayName);
+          adjNodes.push({ id: mockPathwayName, label: mockPathwayName, type: 'pathway' });
+        }
+        adjEdges.push({
+          source: symbol,
+          target: mockPathwayName,
+          predicate: 'biolink:participates_in',
+          score: 0.80
+        });
+      }
+    }
   } else {
-    // Center is a disease. Find connected genes
+    // Disease center node
     const matches = mockAssociations.filter(
       a => a.disease.toLowerCase() === details.label.toLowerCase() && a.score >= minScore
     );
@@ -226,6 +296,24 @@ export const getMockLocalSubgraph = (centerNodeLabel: string, minScore: number):
         target: details.label,
         predicate: m.predicate,
         score: m.score
+      });
+    });
+
+    // Scan custom mappings for reverse-connects
+    Object.keys(customNeighbors).forEach(gene => {
+      customNeighbors[gene].forEach(item => {
+        if (item.id.toLowerCase() === details.label.toLowerCase() && item.score >= minScore) {
+          if (!visitedNodeIds.has(gene)) {
+            visitedNodeIds.add(gene);
+            adjNodes.push({ id: gene, label: gene, type: 'gene' });
+          }
+          adjEdges.push({
+            source: gene,
+            target: details.label,
+            predicate: item.predicate,
+            score: item.score
+          });
+        }
       });
     });
   }

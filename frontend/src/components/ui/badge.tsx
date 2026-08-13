@@ -1,7 +1,7 @@
 import React from 'react';
 
 interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
-  variant?: 'primary' | 'secondary' | 'outline' | 'success' | 'warning' | 'danger' | 'gene' | 'disease';
+  variant?: 'primary' | 'secondary' | 'outline' | 'success' | 'warning' | 'danger' | 'gene' | 'disease' | 'pathway' | 'protein' | 'chemical' | string;
   children: React.ReactNode;
 }
 
@@ -16,11 +16,16 @@ export function Badge({ children, variant = 'primary', className = '', ...props 
     warning: 'border-amber-200/50 bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800/30',
     danger: 'border-rose-200/50 bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400 dark:border-rose-800/30',
     gene: 'border-teal-500/30 bg-teal-500/10 text-teal-700 dark:bg-teal-500/15 dark:text-teal-400 dark:border-teal-500/30',
-    disease: 'border-slate-500/30 bg-slate-500/10 text-slate-700 dark:bg-slate-500/15 dark:text-slate-300 dark:border-slate-500/30'
+    disease: 'border-slate-500/30 bg-slate-500/10 text-slate-700 dark:bg-slate-500/15 dark:text-slate-300 dark:border-slate-500/30',
+    pathway: 'border-purple-500/30 bg-purple-500/10 text-purple-700 dark:bg-purple-500/15 dark:text-purple-300 dark:border-purple-500/30',
+    protein: 'border-indigo-500/30 bg-indigo-500/10 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300 dark:border-indigo-500/30',
+    chemical: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30'
   };
 
+  const activeStyle = variants[variant as keyof typeof variants] || variants.secondary;
+
   return (
-    <span className={`${baseStyle} ${variants[variant]} ${className}`} {...props}>
+    <span className={`${baseStyle} ${activeStyle} ${className}`} {...props}>
       {children}
     </span>
   );

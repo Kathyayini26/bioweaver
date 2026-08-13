@@ -1,7 +1,7 @@
 export interface TermDetails {
   id: string; // e.g. "HGNC:11621"
   label: string; // e.g. "HNF1A"
-  type: 'gene' | 'disease';
+  type: 'gene' | 'disease' | 'pathway' | 'protein' | 'chemical' | string;
   description: string;
   source: string;
   degree: number;
@@ -12,7 +12,7 @@ export interface TermDetails {
 export interface SubgraphNode {
   id: string;
   label: string;
-  type: 'gene' | 'disease';
+  type: 'gene' | 'disease' | 'pathway' | 'protein' | 'chemical' | string;
 }
 
 export interface SubgraphEdge {
@@ -26,6 +26,34 @@ export interface SubgraphData {
   center: SubgraphNode;
   nodes: SubgraphNode[];
   edges: SubgraphEdge[];
+}
+
+/** Real neighbor entry from the knowledge graph */
+export interface RealNeighborEntry {
+  id: string;
+  label: string;
+  type: string;
+  relationship: string;
+  score: number;
+}
+
+/** Real indirect disease entry (2-hop path) */
+export interface RealIndirectDisease {
+  id: string;
+  disease: string;
+  through_gene: string;
+  score: number;
+  path: string[];
+  relationship: string;
+}
+
+/** Structured real subgraph response from backend /graph/{gene} */
+export interface RealSubgraphData {
+  gene: string;
+  directGenes: RealNeighborEntry[];
+  directDiseases: RealNeighborEntry[];
+  indirectDiseases: RealIndirectDisease[];
+  pathways?: RealNeighborEntry[];
 }
 
 export interface PredictionResult {

@@ -1,29 +1,192 @@
-import type { SystemAnalytics, TermDetails, SubgraphData, PredictionResult } from '../types';
+import type {
+  SystemAnalytics,
+  TermDetails,
+  SubgraphData,
+  SubgraphNode,
+  SubgraphEdge,
+  PredictionResult,
+  RealSubgraphData,
+  RealNeighborEntry,
+  RealIndirectDisease,
+} from '../types';
 import * as mock from './mockData';
 
+const BACKEND = 'http://localhost:8000';
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+// ─────────────────────────────────────────────────────────────
+// Convert backend RealSubgraphData → SubgraphData for the
+// D3 canvas, keeping ONLY direct neighbors in the visual graph.
+// Indirect diseases stay in the Associations panel only.
+// ─────────────────────────────────────────────────────────────
+export function realToSubgraph(real: RealSubgraphData, minScore: number): SubgraphData {
+  const centerNode: SubgraphNode = {
+    id: real.gene,
+    label: real.gene,
+    type: 'gene',
+  };
+
+  const nodes: SubgraphNode[] = [centerNode];
+  const edges: SubgraphEdge[] = [];
+  const seen = new Set<string>([real.gene]);
+
+  // Add direct gene neighbors
+  for (const g of real.directGenes) {
+    if (g.score < minScore) continue;
+    if (!seen.has(g.id)) {
+      nodes.push({ id: g.id, label: g.label, type: 'gene' });
+      seen.add(g.id);
+    }
+    edges.push({
+      source: real.gene,
+      target: g.id,
+      predicate: g.relationship,
+      score: g.score,
+    });
+  }
+
+  // Add direct disease neighbors
+  for (const d of real.directDiseases) {
+    if (!seen.has(d.id)) {
+      nodes.push({ id: d.id, label: d.label, type: 'disease' });
+      seen.add(d.id);
+    }
+    edges.push({
+      source: real.gene,
+      target: d.id,
+      predicate: d.relationship,
+      score: d.score ?? 1.0,
+    });
+  }
+
+  // Add biological pathway neighbors
+  if (real.pathways) {
+    for (const p of real.pathways) {
+      if (!seen.has(p.id)) {
+        nodes.push({ id: p.id, label: p.label, type: 'pathway' });
+        seen.add(p.id);
+      }
+      edges.push({
+        source: real.gene,
+        target: p.id,
+        predicate: p.relationship || 'participates_in',
+        score: p.score ?? 0.95,
+      });
+    }
+  }
+
+  return { center: centerNode, nodes, edges };
+}
+
+// ─────────────────────────────────────────────────────────────
+// Fetch real subgraph from backend, fallback to empty
+// ─────────────────────────────────────────────────────────────
+let _realCache: Map<string, RealSubgraphData> = new Map();
+
+export const getRealSubgraph = async (gene: string): Promise<RealSubgraphData | null> => {
+  const key = gene.toUpperCase();
+  if (_realCache.has(key)) return _realCache.get(key)!;
+
+  try {
+    const res = await fetch(`${BACKEND}/graph/${encodeURIComponent(gene)}`);
+    if (!res.ok) {
+      console.warn(`Backend /graph/${gene} returned ${res.status}`);
+      return null;
+    }
+    const data: RealSubgraphData = await res.json();
+    _realCache.set(key, data);
+    return data;
+  } catch (err) {
+    console.warn(`Backend unavailable for /graph/${gene}:`, err);
+    return null;
+  }
+};
+
+// ─────────────────────────────────────────────────────────────
+// getLocalSubgraph — used by App.tsx to get the canvas data
+// ─────────────────────────────────────────────────────────────
+export const getLocalSubgraph = async (
+  centerLabel: string,
+  minScore: number
+): Promise<SubgraphData | null> => {
+  const real = await getRealSubgraph(centerLabel);
+  if (real) {
+    // Debug logging (requirement #14)
+    const directGeneCount = real.directGenes.filter(g => g.score >= minScore).length;
+    const directDiseaseCount = real.directDiseases.length;
+    const indirectCount = real.indirectDiseases.length;
+    console.group(`[BioWeaver] Gene: ${real.gene}`);
+    console.log(`  Direct neighbors: ${directGeneCount + directDiseaseCount}`);
+    console.log(`  Direct genes: ${directGeneCount}`);
+    console.log(`  Direct diseases: ${directDiseaseCount}`);
+    console.log(`  Valid 2-hop disease candidates: ${indirectCount}`);
+    real.indirectDiseases.slice(0, 5).forEach(d => {
+      console.log(`  ${d.path.join(' -> ')}`);
+    });
+    console.groupEnd();
+
+    return realToSubgraph(real, minScore);
+  }
+  // Fallback: backend not running — return empty (user sees "Start backend" message)
+  console.warn(`No backend data for ${centerLabel} — backend may not be running.`);
+  return null;
+};
+
+// ─────────────────────────────────────────────────────────────
+// getTermDetails — derive from real subgraph if possible
+// ─────────────────────────────────────────────────────────────
+export const getTermDetails = async (label: string): Promise<TermDetails | null> => {
+  await delay(50);
+  return mock.getMockTermDetails(label);
+};
+
+// ─────────────────────────────────────────────────────────────
+// predictAssociation — calls FastAPI
+// ─────────────────────────────────────────────────────────────
+export const predictAssociation = async (gene: string, disease: string): Promise<PredictionResult> => {
+  try {
+    const response = await fetch(`${BACKEND}/predict`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ gene, disease }),
+    });
+    if (!response.ok) {
+      throw new Error(`FastAPI responded with status: ${response.status}`);
+    }
+    const data = await response.json();
+    return {
+      geneSymbol: data.gene,
+      diseaseName: data.disease,
+      isAssociated: data.prediction === 1,
+      probability: data.probability,
+      confidence: data.probability >= 0.75 ? 'High' : data.probability >= 0.5 ? 'Moderate' : 'Low',
+    };
+  } catch (err) {
+    console.warn('FastAPI prediction endpoint unavailable, falling back to mock classifier.', err);
+    await delay(450);
+    return mock.predictMockAssociation(gene, disease);
+  }
+};
+
+// ─────────────────────────────────────────────────────────────
+// getSystemAnalytics — still uses mock for now
+// ─────────────────────────────────────────────────────────────
 export const getSystemAnalytics = async (): Promise<SystemAnalytics> => {
   await delay(200);
   return mock.mockAnalytics;
 };
 
-export const getTermDetails = async (label: string): Promise<TermDetails | null> => {
-  await delay(250);
-  return mock.getMockTermDetails(label);
-};
-
-export const getLocalSubgraph = async (centerLabel: string, minScore: number): Promise<SubgraphData | null> => {
-  await delay(300);
-  return mock.getMockLocalSubgraph(centerLabel, minScore);
-};
-
-export const predictAssociation = async (gene: string, disease: string): Promise<PredictionResult> => {
-  await delay(450);
-  return mock.predictMockAssociation(gene, disease);
-};
-
+// ─────────────────────────────────────────────────────────────
+// getGenesList / getDiseasesList
+// ─────────────────────────────────────────────────────────────
 export const getGenesList = async (): Promise<string[]> => {
+  try {
+    const res = await fetch(`${BACKEND}/genes`);
+    if (res.ok) {
+      const data = await res.json();
+      return data.genes ?? [];
+    }
+  } catch (_) {}
   await delay(100);
   return mock.mockGenes;
 };
@@ -32,3 +195,6 @@ export const getDiseasesList = async (): Promise<string[]> => {
   await delay(100);
   return mock.mockDiseases;
 };
+
+// Re-export types for convenience
+export type { RealSubgraphData, RealNeighborEntry, RealIndirectDisease };

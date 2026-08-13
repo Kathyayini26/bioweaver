@@ -31,6 +31,7 @@ html {
   --grid-dot: rgba(148, 163, 184, 0.16); /* slate-300 light dots */
   --graph-node-gene: #0d9488; /* Teal-600 */
   --graph-node-disease: #64748b; /* Slate-500 */
+  --graph-node-pathway: #a855f7; /* Purple-500 */
   --graph-edge: #e2e8f0; /* Light gray edges */
   --graph-edge-highlight: #0d9488; /* Teal-600 */
   --graph-label: #0f172a; /* Slate-900 */
@@ -54,6 +55,7 @@ html {
   --grid-dot: rgba(100, 116, 139, 0.25); /* Subtle blue-gray dots */
   --graph-node-gene: #2dd4bf; /* Bright teal #2DD4BF */
   --graph-node-disease: #64748b; /* Blue-gray slate-500 */
+  --graph-node-pathway: #c084fc; /* Purple-400 */
   --graph-edge: #1e293b; /* Slate-800 edges */
   --graph-edge-highlight: #2dd4bf; /* Bright teal highlight */
   --graph-label: #cbd5e1; /* Slate-300 */
@@ -101,6 +103,34 @@ body, header, input, select, button, table, thead, tbody, tr, th, td, .card, .ba
 
 .selected-glow {
   animation: pulseGlow 3s infinite ease-in-out;
+}
+
+/* Animated pulsing ring for selected disease node */
+@keyframes selectedDiseasePulse {
+  0% {
+    r: 15px;
+    opacity: 0.8;
+    stroke-width: 1.5;
+  }
+  50% {
+    r: 22px;
+    opacity: 0.25;
+    stroke-width: 2.8;
+  }
+  100% {
+    r: 15px;
+    opacity: 0.8;
+    stroke-width: 1.5;
+  }
+}
+
+.selected-disease-glow {
+  animation: selectedDiseasePulse 2s infinite ease-in-out;
+}
+
+/* Soft ambient glow for focused neighboring nodes */
+.node-ambient-glow {
+  filter: drop-shadow(0 0 6px rgba(45, 212, 191, 0.45));
 }
 
 /* Transition class for SVG nodes */

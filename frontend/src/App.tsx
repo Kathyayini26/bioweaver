@@ -4,8 +4,8 @@ import { ResearchPanel } from './components/ResearchPanel';
 import { Input } from './components/ui/input';
 import { Button } from './components/ui/button';
 import { Alert, AlertTitle, AlertDescription } from './components/ui/alert';
-import { getLocalSubgraph, getGenesList, getDiseasesList } from './services/api';
-import type { SubgraphData } from './types';
+import { getLocalSubgraph, getGenesList, getRealSubgraph } from './services/api';
+import type { SubgraphData, RealSubgraphData } from './types';
 import { 
   Search, 
   Sun, 
@@ -24,8 +24,10 @@ function App() {
     const path = window.location.pathname;
     return path === '/workspace' ? '/workspace' : '/';
   });
-  const [selectedNode, setSelectedNode] = useState('BRCA1'); // seed node
+  const [centerNode, setCenterNode] = useState<string | null>(null); // seed node
+  const [focusedNode, setFocusedNode] = useState<string | null>(null); // focused node for research details
   const [subgraph, setSubgraph] = useState<SubgraphData | null>(null);
+  const [realSubgraph, setRealSubgraph] = useState<RealSubgraphData | null>(null);
   const [minScore, setMinScore] = useState(0.7);
   
   // Search state
@@ -99,11 +101,11 @@ function App() {
     }
   };
 
-  // Load searchable nodes list once on mount
+  // Load searchable nodes list once on mount (genes only for gene-centric search)
   useEffect(() => {
-    Promise.all([getGenesList(), getDiseasesList()])
-      .then(([gList, dList]) => {
-        setAllNodesList([...gList, ...dList]);
+    getGenesList()
+      .then((gList) => {
+        setAllNodesList(gList);
       })
       .catch(() => {
         // Soft fail suggestions, but don't crash workspace
@@ -112,12 +114,12 @@ function App() {
 
   // Fetch local subgraph when center node or score threshold changes
   useEffect(() => {
-    if (!selectedNode) return;
+    if (!centerNode) return;
     setLoading(true);
     setError(false);
     setDismissError(false);
 
-    getLocalSubgraph(selectedNode, minScore)
+    getLocalSubgraph(centerNode, minScore)
       .then(res => {
         if (res) {
           setSubgraph(res);
@@ -130,7 +132,16 @@ function App() {
         setError(true);
         setLoading(false);
       });
-  }, [selectedNode, minScore]);
+
+    // Also fetch the structured real subgraph for the Associations panel
+    getRealSubgraph(centerNode)
+      .then(real => {
+        setRealSubgraph(real);
+      })
+      .catch(() => {
+        setRealSubgraph(null);
+      });
+  }, [centerNode, minScore]);
 
   // Search input autocomplete logic
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -156,17 +167,20 @@ function App() {
     // Check if query exists in ontology list
     const matched = allNodesList.find(n => n.toLowerCase() === searchQuery.trim().toLowerCase());
     if (matched) {
-      setSelectedNode(matched);
+      setCenterNode(matched);
+      setFocusedNode(matched);
       setShowSuggestions(false);
     } else {
       // Direct jump fallback
-      setSelectedNode(searchQuery.trim());
+      setCenterNode(searchQuery.trim());
+      setFocusedNode(searchQuery.trim());
       setShowSuggestions(false);
     }
   };
 
   const selectSuggestion = (node: string) => {
-    setSelectedNode(node);
+    setCenterNode(node);
+    setFocusedNode(node);
     setSearchQuery(node);
     setShowSuggestions(false);
   };
@@ -215,7 +229,7 @@ function App() {
                 <Input
                   ref={searchInputRef}
                   id="global-search-input"
-                  placeholder="Search genes or diseases (e.g. BRCA1, diabetes)..."
+                  placeholder="Search genes (e.g. BRCA1, BRCA2, HTT)..."
                   value={searchQuery}
                   onChange={handleSearchChange}
                   onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
@@ -348,21 +362,25 @@ function App() {
                   </div>
                 </div>
               )}
-
               {subgraph ? (
                 <GraphCanvas
                   subgraph={subgraph}
-                  onNodeClick={(label) => setSelectedNode(label)}
-                  onNodeDoubleClick={(label) => setSelectedNode(label)}
+                  centerNode={centerNode}
+                  focusedNode={focusedNode}
+                  onNodeClick={(label) => setFocusedNode(label)}
+                  onNodeDoubleClick={(label) => {
+                    setCenterNode(label);
+                    setFocusedNode(label);
+                  }}
                   minScore={minScore}
                   setMinScore={setMinScore}
                 />
               ) : (
                 /* Guided Empty State */
-                <div className="flex-1 flex flex-col items-center justify-center p-8 border border-dashed border-slate-200 dark:border-slate-800 rounded bg-white/40 dark:bg-slate-900/10">
-                  <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">Welcome to BioWeaver Workspace</span>
-                  <p className="text-[11px] text-slate-550 dark:text-slate-400 max-w-sm text-center mt-1.5 leading-relaxed font-mono">
-                    To start exploring, search for <button onClick={() => setSelectedNode('BRCA1')} className="text-teal-600 dark:text-teal-400 font-bold hover:underline font-mono">BRCA1</button> or click an entity name in the Associations sidebar tab to seed a new local subgraph walk.
+                <div className="flex-1 flex flex-col items-center justify-center p-8 border border-dashed border-slate-200 dark:border-slate-800 rounded bg-white/40 dark:bg-slate-900/10 select-none">
+                  <Workflow className="h-8 w-8 text-slate-300 dark:text-slate-700 mb-3 animate-pulse" />
+                  <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 font-mono">
+                    Search for a gene to begin exploration.
                   </p>
                 </div>
               )}
@@ -370,8 +388,11 @@ function App() {
 
             {/* RIGHT PANEL: Research Sidebar Details (30%) */}
             <ResearchPanel 
-              selectedNodeLabel={selectedNode} 
-              onNodeFocus={(label) => setSelectedNode(label)}
+              subgraph={subgraph}
+              realSubgraph={realSubgraph}
+              centerNodeLabel={centerNode}
+              focusedNodeLabel={focusedNode} 
+              onNodeFocus={(label) => setFocusedNode(label)}
             />
           </main>
         </motion.div>
