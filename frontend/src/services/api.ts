@@ -11,9 +11,24 @@ import type {
 } from '../types';
 import * as mock from './mockData';
 
-// Production & Dev API URL configuration via VITE_API_URL
-const rawApiUrl = (import.meta.env.VITE_API_URL as string) || 'http://localhost:8000';
-const BACKEND = rawApiUrl.replace(/\/$/, '');
+// Production & Dev API URL configuration with automatic production fallback to Render backend
+const getBackendUrl = (): string => {
+  const envUrl = (import.meta.env.VITE_API_URL as string)?.trim();
+  if (envUrl && envUrl !== 'http://localhost:8000') {
+    return envUrl.replace(/\/$/, '');
+  }
+  // If running on Vercel or any non-localhost domain, automatically use deployed Render backend
+  if (
+    typeof window !== 'undefined' && 
+    !window.location.hostname.includes('localhost') && 
+    !window.location.hostname.includes('127.0.0.1')
+  ) {
+    return 'https://bioweaver.onrender.com';
+  }
+  return 'http://localhost:8000';
+};
+
+const BACKEND = getBackendUrl();
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
