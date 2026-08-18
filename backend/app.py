@@ -52,13 +52,14 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS configuration supporting environment variables (FRONTEND_URL) & local dev
+# CORS configuration supporting environment variables (FRONTEND_URL), Vercel domains, & local dev
 allowed_origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "http://localhost:4173",
     "http://127.0.0.1:4173",
     "http://localhost:3000",
+    "https://bioweaver.vercel.app",
 ]
 
 frontend_url = os.getenv("FRONTEND_URL", "").strip()
@@ -68,7 +69,8 @@ if frontend_url:
         if cleaned and cleaned not in allowed_origins:
             allowed_origins.append(cleaned)
 
-if os.getenv("ALLOW_ALL_ORIGINS", "").lower() in ("true", "1"):
+allow_all = os.getenv("ALLOW_ALL_ORIGINS", "true").lower() in ("true", "1")
+if allow_all:
     allowed_origins = ["*"]
 
 logger.info(f"Configured CORS allowed origins: {allowed_origins}")
@@ -76,6 +78,7 @@ logger.info(f"Configured CORS allowed origins: {allowed_origins}")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
