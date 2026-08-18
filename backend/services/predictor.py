@@ -3,6 +3,7 @@ import joblib
 import pandas as pd
 import numpy as np
 import logging
+from pathlib import Path
 from typing import Dict, Optional, Tuple
 
 logger = logging.getLogger(__name__)
@@ -12,42 +13,37 @@ class PredictorService:
         self.model = None
         self.embeddings: Dict[str, np.ndarray] = {}
         
-        # Absolute paths for data assets in data/processed/
-        self.model_path = os.path.abspath(
-            os.path.join(
-                os.path.dirname(__file__), 
-                "../../data/processed/random_forest_model.pkl"
-            )
-        )
-        self.embeddings_path = os.path.abspath(
-            os.path.join(
-                os.path.dirname(__file__), 
-                "../../data/processed/node_embeddings.csv"
-            )
-        )
+        # Robust project-relative paths using pathlib
+        base_dir = Path(__file__).resolve().parent.parent.parent
+        
+        env_model_path = os.getenv("MODEL_PATH", "").strip()
+        env_embeddings_path = os.getenv("EMBEDDINGS_PATH", "").strip()
+        
+        self.model_path = Path(env_model_path) if env_model_path else base_dir / "data" / "processed" / "random_forest_model.pkl"
+        self.embeddings_path = Path(env_embeddings_path) if env_embeddings_path else base_dir / "data" / "processed" / "node_embeddings.csv"
 
     def load_assets(self):
         """Loads the random forest model and node embeddings into memory."""
-        logger.info("Starting asset loading...")
+        logger.info(f"Starting asset loading... Model path: {self.model_path}")
         
         # 1. Load Model
-        if not os.path.exists(self.model_path):
+        if not self.model_path.exists():
             raise FileNotFoundError(f"Model file not found at {self.model_path}")
         
         try:
-            self.model = joblib.load(self.model_path)
+            self.model = joblib.load(str(self.model_path))
             logger.info("Random Forest model successfully loaded.")
         except Exception as e:
             logger.error(f"Failed to load model: {e}")
             raise RuntimeError(f"Failed to load model: {e}")
 
         # 2. Load Embeddings
-        if not os.path.exists(self.embeddings_path):
+        if not self.embeddings_path.exists():
             raise FileNotFoundError(f"Embeddings file not found at {self.embeddings_path}")
             
         try:
-            logger.info("Loading node embeddings CSV...")
-            df = pd.read_csv(self.embeddings_path)
+            logger.info(f"Loading node embeddings CSV from {self.embeddings_path}...")
+            df = pd.read_csv(str(self.embeddings_path))
             
             # Map node column to embedding vectors
             self.embeddings = {}

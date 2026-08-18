@@ -71,10 +71,6 @@ export function ResearchPanel({ subgraph, realSubgraph, centerNodeLabel, focused
   // Active tab state
   const [activeTab, setActiveTab] = useState('details');
 
-  // Associations sorting state
-  const [assocSortField, setAssocSortField] = useState<'neighbor' | 'score'>('score');
-  const [assocSortAsc, setAssocSortAsc] = useState<boolean>(false);
-
   // Fetch Term Details when focused node changes
   useEffect(() => {
     if (!focusedNodeLabel) return;

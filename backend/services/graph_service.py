@@ -6,6 +6,7 @@ No hardcoding. No fabrication. No arbitrary limits.
 import os
 import pickle
 import logging
+from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -13,16 +14,16 @@ logger = logging.getLogger(__name__)
 class GraphService:
     def __init__(self):
         self.G = None
-        self.graph_path = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), "../../data/processed/bioweaver_graph.pkl")
-        )
+        base_dir = Path(__file__).resolve().parent.parent.parent
+        env_graph_path = os.getenv("GRAPH_PATH", "").strip()
+        self.graph_path = Path(env_graph_path) if env_graph_path else base_dir / "data" / "processed" / "bioweaver_graph.pkl"
 
     def load_graph(self):
         """Load the knowledge graph pickle into memory (called once at startup)."""
-        if not os.path.exists(self.graph_path):
+        if not self.graph_path.exists():
             raise FileNotFoundError(f"Graph not found at {self.graph_path}")
         logger.info(f"Loading knowledge graph from {self.graph_path}...")
-        with open(self.graph_path, 'rb') as f:
+        with open(str(self.graph_path), 'rb') as f:
             self.G = pickle.load(f)
         logger.info(f"Graph loaded: {self.G.number_of_nodes()} nodes, {self.G.number_of_edges()} edges")
 

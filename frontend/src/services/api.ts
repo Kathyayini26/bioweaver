@@ -11,7 +11,10 @@ import type {
 } from '../types';
 import * as mock from './mockData';
 
-const BACKEND = 'http://localhost:8000';
+// Production & Dev API URL configuration via VITE_API_URL
+const rawApiUrl = (import.meta.env.VITE_API_URL as string) || 'http://localhost:8000';
+const BACKEND = rawApiUrl.replace(/\/$/, '');
+
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // ─────────────────────────────────────────────────────────────
@@ -111,7 +114,6 @@ export const getLocalSubgraph = async (
 ): Promise<SubgraphData | null> => {
   const real = await getRealSubgraph(centerLabel);
   if (real) {
-    // Debug logging (requirement #14)
     const directGeneCount = real.directGenes.filter(g => g.score >= minScore).length;
     const directDiseaseCount = real.directDiseases.length;
     const indirectCount = real.indirectDiseases.length;
@@ -127,7 +129,6 @@ export const getLocalSubgraph = async (
 
     return realToSubgraph(real, minScore);
   }
-  // Fallback: backend not running — return empty (user sees "Start backend" message)
   console.warn(`No backend data for ${centerLabel} — backend may not be running.`);
   return null;
 };
@@ -169,7 +170,7 @@ export const predictAssociation = async (gene: string, disease: string): Promise
 };
 
 // ─────────────────────────────────────────────────────────────
-// getSystemAnalytics — still uses mock for now
+// getSystemAnalytics — analytics summary
 // ─────────────────────────────────────────────────────────────
 export const getSystemAnalytics = async (): Promise<SystemAnalytics> => {
   await delay(200);

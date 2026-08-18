@@ -1,14 +1,15 @@
 import sys
 import os
 import logging
+from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-# Ensure the project root is in the python path for modules import
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
+# Ensure the project root is in python path regardless of execution directory
+project_root = Path(__file__).resolve().parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
 from backend.services.predictor import predictor_service
 from backend.services.graph_service import graph_service
@@ -26,7 +27,7 @@ logger = logging.getLogger(__name__)
 # FastAPI Lifespan Handler (startup/shutdown)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Load model and node embeddings
+    # Startup: Load model, node embeddings, and knowledge graph
     logger.info("Initializing application lifespan startup...")
     try:
         predictor_service.load_assets()
@@ -51,10 +52,30 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS configuration to support direct frontend connection
+# CORS configuration supporting environment variables (FRONTEND_URL) & local dev
+allowed_origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:4173",
+    "http://127.0.0.1:4173",
+    "http://localhost:3000",
+]
+
+frontend_url = os.getenv("FRONTEND_URL", "").strip()
+if frontend_url:
+    for url in frontend_url.split(","):
+        cleaned = url.strip().rstrip("/")
+        if cleaned and cleaned not in allowed_origins:
+            allowed_origins.append(cleaned)
+
+if os.getenv("ALLOW_ALL_ORIGINS", "").lower() in ("true", "1"):
+    allowed_origins = ["*"]
+
+logger.info(f"Configured CORS allowed origins: {allowed_origins}")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
