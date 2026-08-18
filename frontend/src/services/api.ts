@@ -11,13 +11,20 @@ import type {
 } from '../types';
 import * as mock from './mockData';
 
-// Production & Dev API URL configuration with automatic production fallback to Render backend
+// Production & Dev API URL configuration with automatic production URL correction
 const getBackendUrl = (): string => {
   const envUrl = (import.meta.env.VITE_API_URL as string)?.trim();
+  
+  // Correct any typo in VITE_API_URL that has bioweaver-backend.onrender.com instead of bioweaver.onrender.com
+  if (envUrl && envUrl.includes('bioweaver-backend.onrender.com')) {
+    return 'https://bioweaver.onrender.com';
+  }
+  
   if (envUrl && envUrl !== 'http://localhost:8000') {
     return envUrl.replace(/\/$/, '');
   }
-  // If running on Vercel or any non-localhost domain, automatically use deployed Render backend
+  
+  // If running on Vercel or any non-localhost domain, automatically use live Render backend
   if (
     typeof window !== 'undefined' && 
     !window.location.hostname.includes('localhost') && 
@@ -25,6 +32,7 @@ const getBackendUrl = (): string => {
   ) {
     return 'https://bioweaver.onrender.com';
   }
+  
   return 'http://localhost:8000';
 };
 
