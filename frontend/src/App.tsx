@@ -391,7 +391,8 @@ function App() {
               subgraph={subgraph}
               realSubgraph={realSubgraph}
               centerNodeLabel={centerNode}
-              focusedNodeLabel={focusedNode} 
+              focusedNodeLabel={focusedNode}
+              loading={loading}
               onNodeFocus={(label) => setFocusedNode(label)}
             />
           </main>

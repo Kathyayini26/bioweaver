@@ -27,10 +27,11 @@ interface ResearchPanelProps {
   realSubgraph: RealSubgraphData | null;
   centerNodeLabel: string | null;
   focusedNodeLabel: string | null;
+  loading?: boolean;
   onNodeFocus: (nodeLabel: string) => void;
 }
 
-export function ResearchPanel({ subgraph, realSubgraph, centerNodeLabel, focusedNodeLabel, onNodeFocus }: ResearchPanelProps) {
+export function ResearchPanel({ subgraph, realSubgraph, centerNodeLabel, focusedNodeLabel, loading, onNodeFocus }: ResearchPanelProps) {
   // Details state
   const [details, setDetails] = useState<TermDetails | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
@@ -403,10 +404,17 @@ export function ResearchPanel({ subgraph, realSubgraph, centerNodeLabel, focused
                   </div>
                 )}
 
-                {centerNodeLabel && !realSubgraph && (
+                {centerNodeLabel && loading && !realSubgraph && (
+                  <div className="text-center py-8 text-xs text-slate-400 font-semibold space-y-3">
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-teal-500 border-t-transparent mx-auto"></div>
+                    <div>Loading real graph associations...</div>
+                  </div>
+                )}
+
+                {centerNodeLabel && !loading && !realSubgraph && (
                   <div className="text-center py-8 text-xs text-slate-400 font-semibold space-y-2">
-                    <div>Backend not connected.</div>
-                    <div className="text-[10px] font-normal">Start the FastAPI server to load real knowledge graph data.</div>
+                    <div>Connecting to BioWeaver backend...</div>
+                    <div className="text-[10px] font-normal">Retrying backend connection in background.</div>
                   </div>
                 )}
 
