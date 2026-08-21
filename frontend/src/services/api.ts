@@ -105,27 +105,34 @@ export function realToSubgraph(real: RealSubgraphData, minScore: number): Subgra
 }
 
 // ─────────────────────────────────────────────────────────────
-// Fetch real subgraph from backend, fallback to empty
+// Fetch real subgraph from backend with automatic retry (wakes up Render automatically)
 // ─────────────────────────────────────────────────────────────
 let _realCache: Map<string, RealSubgraphData> = new Map();
 
-export const getRealSubgraph = async (gene: string): Promise<RealSubgraphData | null> => {
+export const getRealSubgraph = async (gene: string, retries = 4): Promise<RealSubgraphData | null> => {
   const key = gene.toUpperCase();
   if (_realCache.has(key)) return _realCache.get(key)!;
 
-  try {
-    const res = await fetch(`${BACKEND}/graph/${encodeURIComponent(gene)}`);
-    if (!res.ok) {
-      console.warn(`Backend /graph/${gene} returned ${res.status}`);
-      return null;
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const res = await fetch(`${BACKEND}/graph/${encodeURIComponent(gene)}`);
+      if (res.ok) {
+        const data: RealSubgraphData = await res.json();
+        _realCache.set(key, data);
+        return data;
+      }
+      console.warn(`Backend /graph/${gene} returned status ${res.status} on attempt ${attempt + 1}`);
+    } catch (err) {
+      console.warn(`Backend connection attempt ${attempt + 1}/${retries} failed for /graph/${gene}:`, err);
     }
-    const data: RealSubgraphData = await res.json();
-    _realCache.set(key, data);
-    return data;
-  } catch (err) {
-    console.warn(`Backend unavailable for /graph/${gene}:`, err);
-    return null;
+
+    // If attempt failed, wait 3.5 seconds before retrying to allow Render cold-start to finish
+    if (attempt < retries - 1) {
+      await delay(3500);
+    }
   }
+
+  return null;
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -165,31 +172,36 @@ export const getTermDetails = async (label: string): Promise<TermDetails | null>
 };
 
 // ─────────────────────────────────────────────────────────────
-// predictAssociation — calls FastAPI
+// predictAssociation — calls FastAPI with automatic retry
 // ─────────────────────────────────────────────────────────────
-export const predictAssociation = async (gene: string, disease: string): Promise<PredictionResult> => {
-  try {
-    const response = await fetch(`${BACKEND}/predict`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ gene, disease }),
-    });
-    if (!response.ok) {
-      throw new Error(`FastAPI responded with status: ${response.status}`);
+export const predictAssociation = async (gene: string, disease: string, retries = 3): Promise<PredictionResult> => {
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const response = await fetch(`${BACKEND}/predict`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gene, disease }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        return {
+          geneSymbol: data.gene,
+          diseaseName: data.disease,
+          isAssociated: data.prediction === 1,
+          probability: data.probability,
+          confidence: data.probability >= 0.75 ? 'High' : data.probability >= 0.5 ? 'Moderate' : 'Low',
+        };
+      }
+    } catch (err) {
+      if (attempt < retries - 1) {
+        await delay(2000);
+      }
     }
-    const data = await response.json();
-    return {
-      geneSymbol: data.gene,
-      diseaseName: data.disease,
-      isAssociated: data.prediction === 1,
-      probability: data.probability,
-      confidence: data.probability >= 0.75 ? 'High' : data.probability >= 0.5 ? 'Moderate' : 'Low',
-    };
-  } catch (err) {
-    console.warn('FastAPI prediction endpoint unavailable, falling back to mock classifier.', err);
-    await delay(450);
-    return mock.predictMockAssociation(gene, disease);
   }
+
+  console.warn('FastAPI prediction endpoint unavailable, falling back to mock classifier.');
+  await delay(450);
+  return mock.predictMockAssociation(gene, disease);
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -201,17 +213,22 @@ export const getSystemAnalytics = async (): Promise<SystemAnalytics> => {
 };
 
 // ─────────────────────────────────────────────────────────────
-// getGenesList / getDiseasesList
+// getGenesList / getDiseasesList with automatic retry
 // ─────────────────────────────────────────────────────────────
-export const getGenesList = async (): Promise<string[]> => {
-  try {
-    const res = await fetch(`${BACKEND}/genes`);
-    if (res.ok) {
-      const data = await res.json();
-      return data.genes ?? [];
+export const getGenesList = async (retries = 3): Promise<string[]> => {
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const res = await fetch(`${BACKEND}/genes`);
+      if (res.ok) {
+        const data = await res.json();
+        return data.genes ?? [];
+      }
+    } catch (_) {
+      if (attempt < retries - 1) {
+        await delay(2500);
+      }
     }
-  } catch (_) {}
-  await delay(100);
+  }
   return mock.mockGenes;
 };
 
