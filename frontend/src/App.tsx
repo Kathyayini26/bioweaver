@@ -4,7 +4,7 @@ import { ResearchPanel } from './components/ResearchPanel';
 import { Input } from './components/ui/input';
 import { Button } from './components/ui/button';
 import { Alert, AlertTitle, AlertDescription } from './components/ui/alert';
-import { getLocalSubgraph, getGenesList, getRealSubgraph } from './services/api';
+import { getLocalSubgraph, getGenesList, getRealSubgraph, pingBackendWarmup } from './services/api';
 import type { SubgraphData, RealSubgraphData } from './types';
 import { 
   Search, 
@@ -20,6 +20,11 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { LandingPage } from './components/LandingPage';
 
 function App() {
+  // Silent Warmup Ping on App Mount
+  useEffect(() => {
+    pingBackendWarmup();
+  }, []);
+
   const [currentPath, setCurrentPath] = useState(() => {
     const path = window.location.pathname;
     return path === '/workspace' ? '/workspace' : '/';
