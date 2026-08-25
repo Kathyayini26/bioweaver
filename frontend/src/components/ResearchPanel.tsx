@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from './ui/card';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from './ui/table';
 import { Badge } from './ui/badge';
@@ -63,6 +63,31 @@ export function ResearchPanel({ subgraph, realSubgraph, centerNodeLabel, focused
   const [stats, setStats] = useState<SystemAnalytics | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
   const [statsError, setStatsError] = useState(false);
+
+  // Dynamic Real ID computation (removes hardcoded MOCK prefixes)
+  const displayId = useMemo(() => {
+    if (!focusedNodeLabel) return '';
+    const node = subgraph?.nodes.find(n => n.label === focusedNodeLabel || n.id === focusedNodeLabel);
+    if (node?.type === 'disease') return `MONDO:${focusedNodeLabel.replace(/\s+/g, '_')}`;
+    if (node?.type === 'pathway') return `REACT:${focusedNodeLabel}`;
+    return `HGNC:${focusedNodeLabel}`;
+  }, [focusedNodeLabel, subgraph]);
+
+  // Dynamic Real Ontology Degree computation (reflects actual graph connections)
+  const displayDegree = useMemo(() => {
+    if (realSubgraph && focusedNodeLabel === realSubgraph.gene) {
+      return realSubgraph.directGenes.length + realSubgraph.directDiseases.length + (realSubgraph.pathways?.length || 0);
+    }
+    if (subgraph && focusedNodeLabel) {
+      const connCount = subgraph.edges.filter(e => {
+        const sId = typeof e.source === 'object' ? (e.source as any).id : e.source;
+        const tId = typeof e.target === 'object' ? (e.target as any).id : e.target;
+        return sId === focusedNodeLabel || tId === focusedNodeLabel;
+      }).length;
+      if (connCount > 0) return connCount;
+    }
+    return details?.degree ?? 0;
+  }, [realSubgraph, subgraph, focusedNodeLabel, details]);
 
   // Predictor state
   const [prediction, setPrediction] = useState<PredictionResult | null>(null);
@@ -247,8 +272,8 @@ export function ResearchPanel({ subgraph, realSubgraph, centerNodeLabel, focused
                                 <h3 className="text-sm font-bold font-mono text-slate-900 dark:text-slate-50 truncate leading-none">
                                   {details.label}
                                 </h3>
-                                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mt-1">
-                                  {details.id}
+                                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mt-1 font-mono">
+                                  {displayId}
                                 </span>
                               </div>
                             </div>
@@ -270,7 +295,7 @@ export function ResearchPanel({ subgraph, realSubgraph, centerNodeLabel, focused
                               </div>
                               <div className="flex justify-between">
                                 <span className="text-slate-550 dark:text-slate-400">Ontology Degree:</span>
-                                <span className="font-semibold font-mono text-slate-700 dark:text-slate-350">{details.degree} connections</span>
+                                <span className="font-semibold font-mono text-slate-700 dark:text-slate-350">{displayDegree} connections</span>
                               </div>
                             </div>
                           </CardContent>
