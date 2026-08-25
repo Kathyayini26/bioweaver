@@ -210,6 +210,15 @@ export function ResearchPanel({ subgraph, realSubgraph, centerNodeLabel, focused
     return getGeneGenomicMetadata(focusedNodeLabel);
   }, [focusedNodeLabel]);
 
+  // Dynamic Vocabulary Schema (HGNC, MONDO, Reactome)
+  const displayVocabularySchema = useMemo(() => {
+    if (!focusedNodeLabel) return 'infores:hgnc (HUGO Gene Nomenclature)';
+    const node = subgraph?.nodes.find(n => n.label === focusedNodeLabel || n.id === focusedNodeLabel);
+    if (node?.type === 'disease') return 'infores:mondo (Monarch Disease Ontology)';
+    if (node?.type === 'pathway') return 'infores:reactome (Reactome Pathway DB)';
+    return 'infores:hgnc (HUGO Gene Nomenclature)';
+  }, [focusedNodeLabel, subgraph]);
+
   // Predictor state
   const [prediction, setPrediction] = useState<PredictionResult | null>(null);
   const [predictLoading, setPredictLoading] = useState(false);
@@ -412,7 +421,7 @@ export function ResearchPanel({ subgraph, realSubgraph, centerNodeLabel, focused
                               </div>
                               <div className="flex justify-between">
                                 <span className="text-slate-550 dark:text-slate-400">Vocabulary Schema:</span>
-                                <span className="font-semibold text-slate-700 dark:text-slate-350">{details.source}</span>
+                                <span className="font-semibold text-slate-700 dark:text-slate-350 font-mono text-[10px]">{displayVocabularySchema}</span>
                               </div>
                               <div className="flex justify-between">
                                 <span className="text-slate-550 dark:text-slate-400">Ontology Degree:</span>
@@ -427,7 +436,7 @@ export function ResearchPanel({ subgraph, realSubgraph, centerNodeLabel, focused
                           <CardHeader className="pb-1">
                             <CardTitle className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
                               <Dna className="h-3.5 w-3.5 text-teal-650 dark:text-teal-400" />
-                              <span>Genomic Structure</span>
+                              <span>Genomic Structure Architecture</span>
                             </CardTitle>
                           </CardHeader>
                           <CardContent className="pt-2 text-xs">
@@ -436,19 +445,39 @@ export function ResearchPanel({ subgraph, realSubgraph, centerNodeLabel, focused
                               <span>Size: {genomicInfo?.sizeKb} kb ({genomicInfo?.exons} Exons)</span>
                             </div>
                             
-                            {/* Exon Intron Minimalist SVG Chart */}
+                            {/* Dynamic Exon Intron SVG Chart */}
                             <svg viewBox="0 0 280 40" className="w-full h-8 overflow-visible mt-2">
                               <line x1="10" y1="20" x2="270" y2="20" stroke="var(--graph-edge)" strokeWidth="2" />
-                              <rect x="10" y="14" width="16" height="12" fill="var(--graph-node-disease)" rx="1" className="opacity-60" />
-                              <text x="18" y="36" textAnchor="middle" fontSize="6.5" fill="var(--text-secondary)" className="font-mono">5'UTR</text>
-                              <rect x="36" y="10" width="30" height="20" fill="var(--graph-node-gene)" rx="2" />
-                              <text x="51" y="36" textAnchor="middle" fontSize="6.5" fill="var(--text-secondary)" className="font-mono">E-1</text>
-                              <rect x="100" y="10" width="45" height="20" fill="var(--graph-node-gene)" rx="2" />
-                              <text x="122" y="36" textAnchor="middle" fontSize="6.5" fill="var(--text-secondary)" className="font-mono">E-2</text>
-                              <rect x="185" y="10" width="38" height="20" fill="var(--graph-node-gene)" rx="2" />
-                              <text x="204" y="36" textAnchor="middle" fontSize="6.5" fill="var(--text-secondary)" className="font-mono">E-3</text>
-                              <rect x="254" y="14" width="16" height="12" fill="var(--graph-node-disease)" rx="1" className="opacity-60" />
-                              <text x="262" y="36" textAnchor="middle" fontSize="6.5" fill="var(--text-secondary)" className="font-mono">3'UTR</text>
+                              <rect x="10" y="14" width="14" height="12" fill="var(--graph-node-disease)" rx="1" className="opacity-60" />
+                              <text x="17" y="36" textAnchor="middle" fontSize="6.5" fill="var(--text-secondary)" className="font-mono">5'UTR</text>
+                              
+                              {(() => {
+                                const totalExons = genomicInfo?.exons || 10;
+                                const displayCount = Math.min(totalExons, 5);
+                                const availableWidth = 210;
+                                const step = availableWidth / displayCount;
+                                const elements = [];
+                                
+                                for (let i = 0; i < displayCount; i++) {
+                                  const x = 30 + i * step;
+                                  const width = Math.max(12, step - 16);
+                                  const isLast = i === displayCount - 1 && totalExons > 5;
+                                  const labelText = isLast ? `E-${totalExons}` : `E-${i + 1}`;
+                                  
+                                  elements.push(
+                                    <g key={i}>
+                                      <rect x={x} y="10" width={width} height="20" fill="var(--graph-node-gene)" rx="2" />
+                                      <text x={x + width / 2} y="36" textAnchor="middle" fontSize="6.5" fill="var(--text-secondary)" className="font-mono">
+                                        {labelText}
+                                      </text>
+                                    </g>
+                                  );
+                                }
+                                return elements;
+                              })()}
+                              
+                              <rect x="256" y="14" width="14" height="12" fill="var(--graph-node-disease)" rx="1" className="opacity-60" />
+                              <text x="263" y="36" textAnchor="middle" fontSize="6.5" fill="var(--text-secondary)" className="font-mono">3'UTR</text>
                             </svg>
                           </CardContent>
                         </Card>
