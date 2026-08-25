@@ -77,7 +77,9 @@ class GraphService:
                 direct_diseases.append(entry)
                 direct_diseases_set.add(nbr)
 
-        # 2-hop indirect diseases
+        # 2-hop indirect diseases scored via Random Forest Machine Learning model
+        from backend.services.predictor import predictor_service
+
         two_hop = {}
         for nbr_gene in direct_genes_set:
             edge1 = self.G.get_edge_data(gene_key, nbr_gene)
@@ -97,15 +99,37 @@ class GraphService:
                 edge2 = self.G.get_edge_data(nbr_gene, nbr2)
                 rel2 = edge2.get('relationship', 'causes')
 
+                # Compute Machine Learning probability score via Random Forest classifier
+                ml_score = None
+                try:
+                    if predictor_service.model is not None:
+                        _, prob = predictor_service.predict(gene_key, nbr2)
+                        ml_score = prob
+                except Exception:
+                    pass
+
+                if ml_score is None:
+                    try:
+                        if predictor_service.model is not None:
+                            _, prob = predictor_service.predict(nbr_gene, nbr2)
+                            ml_score = prob
+                    except Exception:
+                        pass
+
+                final_score = ml_score if ml_score is not None else ppi_score
+
                 key = nbr2
-                if key not in two_hop or ppi_score > two_hop[key]['score']:
+                if key not in two_hop or final_score > two_hop[key]['score']:
                     two_hop[key] = {
                         "id": nbr2,
                         "disease": nbr2,
                         "through_gene": nbr_gene,
-                        "score": round(ppi_score, 4),
+                        "score": round(final_score, 4),
+                        "ml_score": round(ml_score, 4) if ml_score is not None else round(ppi_score, 4),
+                        "ppi_score": round(ppi_score, 4),
                         "path": [gene_key, nbr_gene, nbr2],
-                        "relationship": rel2
+                        "relationship": rel2,
+                        "is_ml_scored": ml_score is not None
                     }
 
         indirect_diseases = sorted(two_hop.values(), key=lambda x: x['score'], reverse=True)

@@ -43,8 +43,11 @@ export interface RealIndirectDisease {
   disease: string;
   through_gene: string;
   score: number;
+  ml_score?: number;
+  ppi_score?: number;
   path: string[];
   relationship: string;
+  is_ml_scored?: boolean;
 }
 
 /** Structured real subgraph response from backend /graph/{gene} */

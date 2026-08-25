@@ -489,6 +489,7 @@ export function ResearchPanel({ subgraph, realSubgraph, centerNodeLabel, focused
                                 <TableRow>
                                   <TableHead>Disease</TableHead>
                                   <TableHead>Relation</TableHead>
+                                  <TableHead>ML Score</TableHead>
                                   <TableHead>Source Gene</TableHead>
                                   <TableHead>Path</TableHead>
                                 </TableRow>
@@ -501,7 +502,12 @@ export function ResearchPanel({ subgraph, realSubgraph, centerNodeLabel, focused
                                     </TableCell>
                                     <TableCell>
                                       <Badge variant="secondary" className="font-mono text-[9px] uppercase font-bold bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
-                                        INDIRECT
+                                        2-HOP
+                                      </Badge>
+                                    </TableCell>
+                                    <TableCell>
+                                      <Badge variant="outline" className="font-mono text-[9px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30">
+                                        {(d.score * 100).toFixed(1)}% ML
                                       </Badge>
                                     </TableCell>
                                     <TableCell className="font-mono text-[10px] font-bold text-purple-600 dark:text-purple-400">
