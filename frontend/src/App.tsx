@@ -123,6 +123,8 @@ function App() {
       .then(res => {
         if (res) {
           setSubgraph(res);
+          setCenterNode(res.center.label);
+          setFocusedNode(res.center.label);
         } else {
           setError(true);
         }

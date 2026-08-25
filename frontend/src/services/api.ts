@@ -11,26 +11,20 @@ import type {
 } from '../types';
 import * as mock from './mockData';
 
-// Production & Dev API URL configuration with automatic production URL correction
+// Production & Dev API URL configuration with immediate domain check
 const getBackendUrl = (): string => {
-  const envUrl = (import.meta.env.VITE_API_URL as string)?.trim();
-  
-  // Correct any typo in VITE_API_URL that has bioweaver-backend.onrender.com instead of bioweaver.onrender.com
-  if (envUrl && envUrl.includes('bioweaver-backend.onrender.com')) {
-    return 'https://bioweaver.onrender.com';
-  }
-  
-  if (envUrl && envUrl !== 'http://localhost:8000') {
-    return envUrl.replace(/\/$/, '');
-  }
-  
-  // If running on Vercel or any non-localhost domain, automatically use live Render backend
+  // If running on Vercel or any non-localhost domain, ALWAYS use deployed Render backend
   if (
     typeof window !== 'undefined' && 
     !window.location.hostname.includes('localhost') && 
     !window.location.hostname.includes('127.0.0.1')
   ) {
     return 'https://bioweaver.onrender.com';
+  }
+  
+  const envUrl = (import.meta.env.VITE_API_URL as string)?.trim();
+  if (envUrl && envUrl !== 'http://localhost:8000') {
+    return envUrl.replace(/\/$/, '');
   }
   
   return 'http://localhost:8000';
@@ -105,11 +99,11 @@ export function realToSubgraph(real: RealSubgraphData, minScore: number): Subgra
 }
 
 // ─────────────────────────────────────────────────────────────
-// Fetch real subgraph from backend with automatic retry (wakes up Render automatically)
+// Fetch real subgraph from backend with rapid retry
 // ─────────────────────────────────────────────────────────────
 let _realCache: Map<string, RealSubgraphData> = new Map();
 
-export const getRealSubgraph = async (gene: string, retries = 4): Promise<RealSubgraphData | null> => {
+export const getRealSubgraph = async (gene: string, retries = 3): Promise<RealSubgraphData | null> => {
   const key = gene.toUpperCase();
   if (_realCache.has(key)) return _realCache.get(key)!;
 
@@ -126,9 +120,8 @@ export const getRealSubgraph = async (gene: string, retries = 4): Promise<RealSu
       console.warn(`Backend connection attempt ${attempt + 1}/${retries} failed for /graph/${gene}:`, err);
     }
 
-    // If attempt failed, wait 3.5 seconds before retrying to allow Render cold-start to finish
     if (attempt < retries - 1) {
-      await delay(3500);
+      await delay(1200);
     }
   }
 
@@ -172,9 +165,9 @@ export const getTermDetails = async (label: string): Promise<TermDetails | null>
 };
 
 // ─────────────────────────────────────────────────────────────
-// predictAssociation — calls FastAPI with automatic retry
+// predictAssociation — calls FastAPI
 // ─────────────────────────────────────────────────────────────
-export const predictAssociation = async (gene: string, disease: string, retries = 3): Promise<PredictionResult> => {
+export const predictAssociation = async (gene: string, disease: string, retries = 2): Promise<PredictionResult> => {
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
       const response = await fetch(`${BACKEND}/predict`, {
@@ -194,7 +187,7 @@ export const predictAssociation = async (gene: string, disease: string, retries 
       }
     } catch (err) {
       if (attempt < retries - 1) {
-        await delay(2000);
+        await delay(1000);
       }
     }
   }
@@ -215,7 +208,7 @@ export const getSystemAnalytics = async (): Promise<SystemAnalytics> => {
 // ─────────────────────────────────────────────────────────────
 // getGenesList / getDiseasesList with automatic retry
 // ─────────────────────────────────────────────────────────────
-export const getGenesList = async (retries = 3): Promise<string[]> => {
+export const getGenesList = async (retries = 2): Promise<string[]> => {
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
       const res = await fetch(`${BACKEND}/genes`);
@@ -225,7 +218,7 @@ export const getGenesList = async (retries = 3): Promise<string[]> => {
       }
     } catch (_) {
       if (attempt < retries - 1) {
-        await delay(2500);
+        await delay(1000);
       }
     }
   }
