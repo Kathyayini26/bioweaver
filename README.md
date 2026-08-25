@@ -73,11 +73,10 @@ Evidence Path Exploration
 ```
 
 ---
-
 ## Key Highlights
 
 - Biomedical Knowledge Graph with **18,597 Nodes**
-- Integrated **107,187 Biological Relationships**
+- Integrated **107,457 Biological Relationships**
 - Combined Monarch and STRING datasets
 - Node2Vec Graph Representation Learning
 - Random Forest-Based Association Analysis
