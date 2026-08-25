@@ -188,21 +188,23 @@ export function ResearchPanel({ subgraph, realSubgraph, centerNodeLabel, focused
     return `HGNC:${focusedNodeLabel}`;
   }, [focusedNodeLabel, subgraph]);
 
-  // Dynamic Real Ontology Degree computation (reflects actual graph connections)
+  // Dynamic Real Ontology Degree computation (always matches rendered canvas nodes)
   const displayDegree = useMemo(() => {
+    if (subgraph && focusedNodeLabel) {
+      const connectedNodeIds = new Set<string>();
+      subgraph.edges.forEach(e => {
+        const sId = typeof e.source === 'object' ? (e.source as any).id : e.source;
+        const tId = typeof e.target === 'object' ? (e.target as any).id : e.target;
+        if (sId === focusedNodeLabel) connectedNodeIds.add(tId);
+        if (tId === focusedNodeLabel) connectedNodeIds.add(sId);
+      });
+      if (connectedNodeIds.size > 0) return connectedNodeIds.size;
+    }
     if (realSubgraph && focusedNodeLabel === realSubgraph.gene) {
       return realSubgraph.directGenes.length + realSubgraph.directDiseases.length + (realSubgraph.pathways?.length || 0);
     }
-    if (subgraph && focusedNodeLabel) {
-      const connCount = subgraph.edges.filter(e => {
-        const sId = typeof e.source === 'object' ? (e.source as any).id : e.source;
-        const tId = typeof e.target === 'object' ? (e.target as any).id : e.target;
-        return sId === focusedNodeLabel || tId === focusedNodeLabel;
-      }).length;
-      if (connCount > 0) return connCount;
-    }
     return details?.degree ?? 0;
-  }, [realSubgraph, subgraph, focusedNodeLabel, details]);
+  }, [subgraph, realSubgraph, focusedNodeLabel, details]);
 
   // Dynamic Genomic Metadata (Locus, Size, Exons, Description per gene)
   const genomicInfo = useMemo(() => {
