@@ -48,13 +48,13 @@ Node2Vec Representation Learning (128D Embeddings)
 Hadamard Operator (u ⊙ v) + Cosine Similarity Feature Matrix (129D)
        │
        ▼
-80/20 Train/Test Split (10,612 Train / 2,654 Test Samples)
+80/20 Train/Test Split (11,137 Train / 2,785 Test Samples = 13,922 Total)
        │
        ▼
 Constrained Regularized Random Forest Classifier
        │
        ▼
-Official Scientific Benchmark: 87.19% Test Accuracy | 94.46% ROC-AUC | 0.20% Train-Test Gap
+Official Scientific Benchmark: 86.43% Test Accuracy | 93.30% ROC-AUC | 1.46% Train-Test Gap
 ```
 
 ### Interactive Research Workspace

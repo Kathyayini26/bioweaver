@@ -7,17 +7,17 @@ export const mockAnalytics: SystemAnalytics = {
     uniqueGenes: 6688,
     uniqueDiseases: 11909,
     proteinInteractions: 100554,
-    trainSamples: 10612,
-    testSamples: 2654
+    trainSamples: 11137,
+    testSamples: 2785
   },
   modelMetrics: {
-    accuracy: 0.8719,
-    precision: 0.8730,
-    recall: 0.8704,
-    f1Score: 0.8717,
+    accuracy: 0.8643,
+    precision: 0.8586,
+    recall: 0.8721,
+    f1Score: 0.8653,
     confusionMatrix: [
-      [1159, 168],
-      [172, 1155]
+      [1193, 200],
+      [178, 1214]
     ]
   },
   sourceDistribution: [
