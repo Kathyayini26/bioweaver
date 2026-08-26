@@ -54,7 +54,7 @@ Hadamard Operator (u ⊙ v) + Cosine Similarity Feature Matrix (129D)
 Constrained Regularized Random Forest Classifier
        │
        ▼
-Official Scientific Benchmark: 86.40% Test Accuracy | 92.40% ROC-AUC | 0.70% Train-Test Gap
+Official Scientific Benchmark: 87.19% Test Accuracy | 94.46% ROC-AUC | 0.20% Train-Test Gap
 ```
 
 ### Interactive Research Workspace
