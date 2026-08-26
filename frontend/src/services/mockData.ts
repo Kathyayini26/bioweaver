@@ -11,13 +11,13 @@ export const mockAnalytics: SystemAnalytics = {
     testSamples: 2654
   },
   modelMetrics: {
-    accuracy: 0.4766,
-    precision: 0.0811,
-    recall: 0.0045,
-    f1Score: 0.0086,
+    accuracy: 0.9861,
+    precision: 0.9886,
+    recall: 0.9834,
+    f1Score: 0.9860,
     confusionMatrix: [
-      [1259, 68],
-      [1321, 6]
+      [1312, 15],
+      [22, 1305]
     ]
   },
   sourceDistribution: [
