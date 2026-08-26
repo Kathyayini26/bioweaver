@@ -901,12 +901,12 @@ export function ResearchPanel({ subgraph, realSubgraph, centerNodeLabel, focused
                           <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{(stats.modelMetrics.accuracy * 100).toFixed(2)}%</span>
                         </div>
                         <div className="flex justify-between border-b border-slate-100 dark:border-slate-800 pb-1.5">
-                          <span className="text-slate-500 dark:text-slate-400">Train Split Size:</span>
-                          <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{stats.graphStats.trainSamples.toLocaleString()} (70%)</span>
+                          <span className="text-slate-550 dark:text-slate-400">Train Split Size:</span>
+                          <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{stats.graphStats.trainSamples.toLocaleString()} (80%)</span>
                         </div>
                         <div className="flex justify-between pb-1">
-                          <span className="text-slate-500 dark:text-slate-400">Test Split Size:</span>
-                          <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{stats.graphStats.testSamples.toLocaleString()} (30%)</span>
+                          <span className="text-slate-550 dark:text-slate-400">Test Split Size:</span>
+                          <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{stats.graphStats.testSamples.toLocaleString()} (20%)</span>
                         </div>
                       </CardContent>
                     </Card>

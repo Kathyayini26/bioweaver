@@ -2,22 +2,22 @@ import type { SystemAnalytics, TermDetails, SubgraphData, SubgraphNode, Subgraph
 
 export const mockAnalytics: SystemAnalytics = {
   graphStats: {
-    totalNodes: 11371,
-    totalEdges: 107457,
-    uniqueGenes: 4800,
-    uniqueDiseases: 6571,
+    totalNodes: 18597,
+    totalEdges: 107187,
+    uniqueGenes: 6688,
+    uniqueDiseases: 11909,
     proteinInteractions: 100554,
-    trainSamples: 9745,
-    testSamples: 4177
+    trainSamples: 10612,
+    testSamples: 2654
   },
   modelMetrics: {
-    accuracy: 0.6951,
-    precision: 0.7024,
-    recall: 0.6845,
-    f1Score: 0.6933,
+    accuracy: 0.4766,
+    precision: 0.0811,
+    recall: 0.0045,
+    f1Score: 0.0086,
     confusionMatrix: [
-      [299, 29],
-      [171, 157]
+      [1259, 68],
+      [1321, 6]
     ]
   },
   sourceDistribution: [

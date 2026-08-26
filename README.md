@@ -36,22 +36,28 @@ STRING Database
  Gene • Disease • Pathway Network
 ```
 
-### Machine Learning Pipeline
+### Machine Learning Pipeline (Leakage-Safe Inductive Link Prediction)
 
 ```text
-Knowledge Graph
+Full Knowledge Graph (18,597 Nodes, 107,187 Edges)
        │
        ▼
-Node2Vec Embeddings (128D)
+Split 6,633 Positive Edges (80% Train / 20% Held-Out Test)
        │
        ▼
-Feature Engineering (256D)
+Remove ALL 1,327 Test Edges from Graph BEFORE Embeddings (G_train)
        │
        ▼
-Random Forest Model
+Node2Vec Embeddings (64D) on G_train ONLY (Zero Transductive Leakage)
        │
        ▼
-Association Analysis
+Hadamard Operator (u ⊙ v) + Cosine Similarity Feature Matrix (65D)
+       │
+       ▼
+Regularized Random Forest Classifier Evaluation
+       │
+       ▼
+Measured Zero-Leakage Benchmark: 70.31% ROC-AUC | 47.66% Inductive Test Accuracy
 ```
 
 ### Interactive Research Workspace
