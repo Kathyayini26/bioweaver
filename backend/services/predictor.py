@@ -23,7 +23,7 @@ class PredictorService:
         self.embeddings_path = Path(env_embeddings_path) if env_embeddings_path else base_dir / "data" / "processed" / "node_embeddings.csv"
 
     def load_assets(self):
-        """Loads the random forest model and node embeddings into memory."""
+        """Loads the random forest model and node embeddings into memory efficiently."""
         logger.info(f"Starting asset loading... Model path: {self.model_path}")
         
         # 1. Load Model
@@ -37,21 +37,14 @@ class PredictorService:
             logger.error(f"Failed to load model: {e}")
             raise RuntimeError(f"Failed to load model: {e}")
 
-        # 2. Load Embeddings
+        # 2. Load Embeddings (Fast memory-efficient vector dict loading)
         if not self.embeddings_path.exists():
             raise FileNotFoundError(f"Embeddings file not found at {self.embeddings_path}")
             
         try:
             logger.info(f"Loading node embeddings CSV from {self.embeddings_path}...")
-            df = pd.read_csv(str(self.embeddings_path))
-            
-            # Map node column to embedding vectors
-            self.embeddings = {}
-            for _, row in df.iterrows():
-                node_name = row["node"]
-                vector = row.iloc[1:].values.astype(float)
-                self.embeddings[node_name] = vector
-                
+            df = pd.read_csv(str(self.embeddings_path), index_col=0)
+            self.embeddings = {str(k): v.values.astype(np.float64) for k, v in df.iterrows()}
             logger.info(f"Loaded {len(self.embeddings)} node embeddings successfully.")
         except Exception as e:
             logger.error(f"Failed to load embeddings: {e}")
@@ -63,7 +56,7 @@ class PredictorService:
 
     def predict(self, gene_node: str, disease_node: str) -> Tuple[int, float]:
         """
-        Concatenates gene and disease embeddings and performs prediction.
+        Computes Hadamard product and Cosine Similarity (129D) and performs prediction.
         Returns (prediction, probability).
         """
         if self.model is None:
@@ -75,15 +68,16 @@ class PredictorService:
         if gene_emb is None or disease_emb is None:
             raise ValueError("Embedding not found for the requested nodes.")
             
-        # Concatenate features: 128 + 128 = 256
-        features = np.concatenate([gene_emb, disease_emb]).reshape(1, -1)
-        
-        # Wrap in a pandas DataFrame to match expected feature columns
-        input_df = pd.DataFrame(features, columns=[str(i) for i in range(256)])
+        # Hadamard Operator (128D) + Cosine Similarity (1D) = 129D
+        hadamard = gene_emb * disease_emb
+        norm_g = np.linalg.norm(gene_emb)
+        norm_d = np.linalg.norm(disease_emb)
+        cosine = np.array([np.dot(gene_emb, disease_emb) / (norm_g * norm_d + 1e-9)])
+        features = np.concatenate([hadamard, cosine]).reshape(1, -1)
         
         # Inference
-        prediction = int(self.model.predict(input_df)[0])
-        probabilities = self.model.predict_proba(input_df)[0]
+        prediction = int(self.model.predict(features)[0])
+        probabilities = self.model.predict_proba(features)[0]
         # Probability of positive class (index 1)
         probability = float(probabilities[1])
         
