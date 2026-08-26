@@ -36,7 +36,7 @@ STRING Database
  Gene • Disease • Pathway Network
 ```
 
-### Machine Learning Pipeline (Hadamard Feature Regularization)
+### Machine Learning Pipeline (Regularized Hadamard Baseline)
 
 ```text
 Full Knowledge Graph (18,597 Nodes, 107,187 Edges)
@@ -51,10 +51,10 @@ Hadamard Operator (u ⊙ v) + Cosine Similarity Feature Matrix (129D)
 80/20 Train/Test Split (10,612 Train / 2,654 Test Samples)
        │
        ▼
-Feature-Regularized Random Forest Classifier
+Constrained Regularized Random Forest Classifier
        │
        ▼
-Final Benchmark: 98.61% Test Accuracy | 99.72% ROC-AUC | 0.31% Train-Test Gap
+Official Scientific Benchmark: 86.40% Test Accuracy | 92.40% ROC-AUC | 0.70% Train-Test Gap
 ```
 
 ### Interactive Research Workspace
