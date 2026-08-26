@@ -4,8 +4,8 @@ export const mockAnalytics: SystemAnalytics = {
   graphStats: {
     totalNodes: 18597,
     totalEdges: 107187,
-    uniqueGenes: 6688,
-    uniqueDiseases: 11909,
+    uniqueGenes: 12026,
+    uniqueDiseases: 6571,
     proteinInteractions: 100554,
     trainSamples: 11137,
     testSamples: 2785
