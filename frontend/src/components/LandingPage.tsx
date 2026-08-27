@@ -121,12 +121,12 @@ export function LandingPage({ onLaunch, isDarkMode, toggleTheme }: LandingPagePr
     const startTime = performance.now();
     
     const targetValues = {
-      genes: 4800,
+      genes: 12026,
       diseases: 6571,
-      nodes: 11371,
-      edges: 107457,
+      nodes: 18597,
+      edges: 107187,
       ppi: 100554,
-      assoc: 6903
+      assoc: 6961
     };
 
     let animationFrameId: number;
@@ -1068,7 +1068,7 @@ export function LandingPage({ onLaunch, isDarkMode, toggleTheme }: LandingPagePr
 
               <div>
                 <span className="font-bold text-slate-900 dark:text-slate-105 block mb-1">3. Ensemble Prediction</span>
-                Pairwise candidate links concatenate individual 128-dimensional node embeddings into a 256-dimensional feature vector. The vector is classified using an ensemble Random Forest model configured with exactly 200 estimators.
+                Pairwise candidate links compute 128-dimensional Hadamard product features (u ⊙ v) and Cosine Similarity into a 129-dimensional feature space. The vector is classified using a regularized ensemble Random Forest model configured with 150 estimators.
               </div>
 
               <div className="border-t border-slate-200/50 dark:border-slate-800/40 pt-3 flex items-center justify-between text-[10px] text-slate-500 font-bold">
